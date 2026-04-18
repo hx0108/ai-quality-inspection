@@ -1,0 +1,64 @@
+# ==================== 敏感数据（不入库） ====================
+# 环境变量和密钥
+.env
+*.env.local
+*.env.production
+
+# 数据库文件（含真实用户信息、电话号码）
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+
+# 公司检查模板（含专有标准）
+backend/data/templates/
+deploy_templates.py
+
+# 部署脚本（含服务器密码）
+setup_nginx.py
+deploy_*.py
+
+# 检查照片（含现场照片、水印信息）
+backend/data/photos/
+**/photos/
+
+# 生成的报告文件
+backend/data/reports/
+**/reports/
+
+# 分析数据缓存
+backend/data/analysis/
+
+# 测试生成的图片
+test_*.png
+
+# ==================== 开发环境 ====================
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+.venv/
+venv/
+*.egg
+
+# Node
+node_modules/
+dist/
+.cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 加密备份
+*.bak
+*.zip
+*.7z
+*.enc
