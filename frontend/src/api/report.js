@@ -1,4 +1,5 @@
 import request from '../utils/request'
+import { getAuthToken } from '../utils/authStorage'
 
 // 生成报告
 export function generateReport(taskId) {
@@ -17,7 +18,7 @@ export function getReport(taskId) {
 
 // 下载报告（兼容 PC + 移动端）
 export async function downloadReportFile(taskId, format = 'word') {
-  const token = localStorage.getItem('token')
+  const token = getAuthToken()
   const ext = format === 'pdf' ? 'pdf' : 'docx'
 
   try {
@@ -59,4 +60,9 @@ export function getReportVersions(taskId) {
 // 获取指定版本报告详情
 export function getReportById(reportId) {
   return request.get(`/reports/version/${reportId}`)
+}
+
+// 删除报告（仅管理员）
+export function deleteReport(taskId) {
+  return request.delete(`/reports/${taskId}`)
 }

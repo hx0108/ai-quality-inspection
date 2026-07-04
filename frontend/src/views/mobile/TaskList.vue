@@ -143,16 +143,7 @@
       </div>
     </van-action-sheet>
 
-    <van-action-sheet v-model:show="showUser" title="个人信息">
-      <div class="user-info">
-        <van-cell title="用户名" :value="user.username" />
-        <van-cell title="姓名" :value="user.real_name" />
-        <van-cell title="角色" :value="getRoleText(user.role)" />
-        <van-button block type="danger" @click="onLogout" style="margin-top: 20px">
-          退出登录
-        </van-button>
-      </div>
-    </van-action-sheet>
+    <MobileUserSheet v-model:show="showUser" />
 
     <!-- 创建任务弹窗 -->
     <van-popup v-model:show="showCreate" position="bottom" round style="height: 60%">
@@ -228,6 +219,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast, showSuccessToast } from 'vant'
 import { useAuthStore } from '../../stores/auth'
+import MobileUserSheet from '../../components/MobileUserSheet.vue'
 import { getMyTasks, getProjects, createTask } from '../../api/tasks'
 import { createRecord } from '../../api/inspection'
 import { getScoringStatus, getModuleScoringStatus } from '../../api/scoring'
@@ -353,10 +345,6 @@ const viewModuleDetail = (recordId) => {
   router.push(`/inspection/${recordId}`)
 }
 
-const onLogout = () => {
-  authStore.logout()
-}
-
 const onProjectConfirm = ({ selectedOptions }) => {
   const selected = selectedOptions[0]
   newTask.value.project_id = selected.value
@@ -420,17 +408,6 @@ const getModuleStatusType = (status) => {
 const getModuleStatusText = (status) => {
   const map = { not_started: '未开始', in_progress: '检查中', completed: '已完成' }
   return map[status] || status
-}
-
-const getRoleText = (role) => {
-  const map = {
-    admin: '管理员',
-    inspector: '检查员',
-    site_supervisor: '阵地督导',
-    field_supervisor: '驻场经理',
-    project_staff: '项目人员'
-  }
-  return map[role] || role
 }
 
 // 评分状态缓存
@@ -694,10 +671,6 @@ onMounted(() => {
 .module-name {
   font-size: 14px;
   color: #333;
-}
-
-.user-info {
-  padding: 16px;
 }
 
 .empty-tip {

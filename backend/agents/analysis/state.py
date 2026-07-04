@@ -16,6 +16,7 @@ class AnalysisState(TypedDict, total=False):
     time_range_end: Optional[str]
     report_a_id: Optional[str]
     report_b_id: Optional[str]
+    project_ids: Optional[list]          # 全项目概览：选中的项目ID列表
     filters: Optional[dict]
 
     # === 数据收集输出 ===

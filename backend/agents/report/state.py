@@ -10,6 +10,7 @@ class ReportState(TypedDict):
     """报告生成工作流状态"""
     # 输入
     task_id: str
+    project_id: int
 
     # collect_data 输出
     project_name: str

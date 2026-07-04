@@ -17,8 +17,8 @@
     </div>
 
     <template v-else>
-      <!-- 统计卡片 -->
-      <div class="stat-grid">
+      <!-- 统计卡片（用 m-stat-grid 独立命名，避免被全局 design-upgrade.css 的 stat-grid 3列规则覆盖）-->
+      <div class="m-stat-grid">
         <div class="stat-card clickable" style="--accent: #2563eb; --accent-light: #EFF6FF" @click="openTaskSheet()">
           <div class="stat-icon" style="background: var(--accent-light); color: var(--accent)">
             <van-icon name="todo-list-o" size="22" />
@@ -44,6 +44,18 @@
             </div>
           </div>
         </div>
+        <div class="stat-card clickable" style="--accent: #f59e0b; --accent-light: #FFFBEB" @click="openRectSheet()">
+          <div class="stat-icon" style="background: var(--accent-light); color: var(--accent)">
+            <van-icon name="clock-o" size="22" />
+          </div>
+          <div class="stat-body">
+            <div class="stat-num">{{ summary.pending_rectifications || 0 }}</div>
+            <div class="stat-label">待整改</div>
+            <div class="stat-tags">
+              <span class="stat-tag tag-warn">已提交 {{ summary.submitted_rectifications || 0 }}</span>
+            </div>
+          </div>
+        </div>
         <div class="stat-card clickable" style="--accent: #dc2626; --accent-light: #FEF2F2" @click="openIssueSheet()">
           <div class="stat-icon" style="background: var(--accent-light); color: var(--accent)">
             <van-icon name="warning-o" size="22" />
@@ -58,28 +70,15 @@
             </div>
           </div>
         </div>
-        <div class="stat-card clickable" style="--accent: #f59e0b; --accent-light: #FFFBEB" @click="openRectSheet()">
-          <div class="stat-icon" style="background: var(--accent-light); color: var(--accent)">
-            <van-icon name="clock-o" size="22" />
-          </div>
-          <div class="stat-body">
-            <div class="stat-num">{{ summary.pending_rectifications || 0 }}</div>
-            <div class="stat-label">待整改</div>
-            <div class="stat-tags">
-              <span class="stat-tag tag-blue">{{ summary.submitted_rectifications || 0 }}审核中</span>
-              <span class="stat-tag tag-red">{{ summary.rejected_rectifications || 0 }}已驳回</span>
-            </div>
-          </div>
-        </div>
         <div class="stat-card clickable" style="--accent: #059669; --accent-light: #ECFDF5" @click="openRectSheet()">
           <div class="stat-icon" style="background: var(--accent-light); color: var(--accent)">
             <van-icon name="passed" size="22" />
           </div>
           <div class="stat-body">
-            <div class="stat-num">{{ summary.approved_rectifications || 0 }}</div>
-            <div class="stat-label">已整改</div>
+            <div class="stat-num">{{ summary.rectification_rate || 0 }}<span class="stat-unit">%</span></div>
+            <div class="stat-label">整改完成率</div>
             <div class="stat-tags">
-              <span class="stat-tag tag-green">完成率 {{ summary.rectification_rate || 0 }}%</span>
+              <span class="stat-tag tag-green">已通过 {{ summary.approved_rectifications || 0 }}</span>
             </div>
           </div>
         </div>
@@ -115,16 +114,7 @@
       <div class="section-card">
         <div class="section-title">各项目整改完成率</div>
         <div v-if="rectStats.length === 0" class="section-empty">暂无数据</div>
-        <div v-for="r in rectStats" :key="r.project_name" class="score-row clickable" @click="openRectSheet()">
-          <div class="score-row-top">
-            <span class="score-name">{{ r.project_name }}</span>
-            <span class="score-value" :class="r.rate >= 80 ? 'score-good' : r.rate >= 50 ? 'score-warn' : 'score-bad'">
-              {{ r.approved }}/{{ r.total }}
-            </span>
-          </div>
-          <van-progress :percentage="r.rate" :stroke-width="6" :show-pivot="false"
-            :color="r.rate >= 80 ? '#059669' : r.rate >= 50 ? '#d97706' : '#dc2626'" track-color="#F1F5F9" />
-        </div>
+        <div v-else ref="rectChartRef" style="width:100%; height:420px;"></div>
       </div>
     </template>
 
@@ -217,17 +207,10 @@
       <van-tabbar-item icon="bar-chart-o" to="/analysis-mobile">分析</van-tabbar-item>
     </van-tabbar>
 
-    <van-action-sheet v-model:show="showUser" title="个人信息">
-      <div class="user-info">
-        <van-cell title="用户名" :value="user.username" />
-        <van-cell title="姓名" :value="user.real_name" />
-        <van-cell title="角色" :value="getRoleText(user.role)" />
-        <van-button block type="danger" @click="onLogout" style="margin-top: 20px">退出登录</van-button>
-      </div>
-    </van-action-sheet>
+    <MobileUserSheet v-model:show="showUser" />
 
     <!-- 通知面板 -->
-    <van-popup v-model:show="showNotifications" position="right" style="width: 100%; height: 100%; top: 0">
+    <van-popup v-model:show="showNotifications" position="right" class="notification-fullscreen" style="width: 100%; height: 100%">
       <div class="notification-page">
         <van-nav-bar title="通知" left-arrow @click-left="showNotifications = false">
           <template #right>
@@ -256,21 +239,23 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { useAuthStore } from '../../stores/auth'
+import MobileUserSheet from '../../components/MobileUserSheet.vue'
+import echarts from '../../utils/echarts'
 import { getDashboardStats } from '../../api/stats'
 import { getNotifications, getUnreadCount, markAsRead, markAllAsRead } from '../../api/notification'
 import { getAllRectifications } from '../../api/rectification'
 
 const router = useRouter()
-const authStore = useAuthStore()
 
 const loading = ref(true)
 const summary = ref({})
 const projectScores = ref([])
 const issueByModule = ref([])
 const rectStats = ref([])
+const rectChartRef = ref(null)
+let rectChart = null
 const coverageDetail = ref({ checked_projects: [], unchecked_projects: [] })
 const activeTab = ref(0)
 const showUser = ref(false)
@@ -332,7 +317,88 @@ const filteredIssues = computed(() => {
   return popupIssues.value.filter(i => i.module_name === issueFilter.value)
 })
 
-const user = computed(() => authStore.user || {})
+const renderRectChart = () => {
+  if (!rectChartRef.value || !rectStats.value.length) return
+  if (!rectChart) {
+    rectChart = echarts.init(rectChartRef.value)
+  }
+  const data = [...rectStats.value].reverse()
+  rectChart.setOption({
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
+      backgroundColor: 'rgba(255, 255, 255, 0.96)',
+      borderColor: '#E2E8F0',
+      borderWidth: 1,
+      textStyle: { color: '#18181b', fontSize: 13 },
+      extraCssText: 'box-shadow: 0 4px 12px rgba(0,0,0,0.08); border-radius: 8px;',
+      formatter: (params) => {
+        const name = params[0].name
+        const approved = params.find(p => p.seriesName === '已整改')?.value || 0
+        const pending = params.find(p => p.seriesName === '未整改')?.value || 0
+        const total = approved + pending
+        const rate = total > 0 ? ((approved / total) * 100).toFixed(1) : 0
+        return `<div style="font-weight:600;margin-bottom:4px">${name}</div>` +
+          `<div>已整改：<span style="color:#16a34a;font-weight:600">${approved}</span></div>` +
+          `<div>未整改：<span style="color:#dc2626;font-weight:600">${pending}</span></div>` +
+          `<div style="margin-top:4px;border-top:1px solid #eee;padding-top:4px">完成率：<b>${rate}%</b></div>`
+      }
+    },
+    legend: {
+      data: ['已整改', '未整改'],
+      top: 0,
+      right: 10,
+      textStyle: { fontSize: 11, color: '#52525b' },
+      itemWidth: 10,
+      itemHeight: 10,
+      itemGap: 12
+    },
+    grid: { left: 80, right: 30, top: 30, bottom: 10 },
+    xAxis: {
+      type: 'value',
+      axisLine: { show: false },
+      axisTick: { show: false },
+      splitLine: { lineStyle: { color: '#f4f4f5', type: 'dashed' } },
+      axisLabel: { color: '#94A3B8', fontSize: 10 }
+    },
+    yAxis: {
+      type: 'category',
+      data: data.map(i => i.project_name),
+      axisLine: { show: false },
+      axisTick: { show: false },
+      axisLabel: { fontSize: 11, color: '#52525b', width: 70, overflow: 'truncate' }
+    },
+    series: [
+      {
+        name: '已整改',
+        type: 'bar',
+        stack: 'total',
+        data: data.map(i => i.approved),
+        itemStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+            { offset: 0, color: '#16a34a' },
+            { offset: 1, color: '#34D399' }
+          ])
+        },
+        barWidth: 14,
+      },
+      {
+        name: '未整改',
+        type: 'bar',
+        stack: 'total',
+        data: data.map(i => i.pending),
+        itemStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+            { offset: 0, color: '#F87171' },
+            { offset: 1, color: '#FCA5A5' }
+          ]),
+          borderRadius: [0, 4, 4, 0]
+        },
+        barWidth: 14,
+      }
+    ]
+  })
+}
 
 const fetchStats = async () => {
   loading.value = true
@@ -343,13 +409,14 @@ const fetchStats = async () => {
     issueByModule.value = res.issue_by_module || []
     rectStats.value = res.project_rectification_stats || []
     coverageDetail.value = res.coverage_detail || { checked_projects: [], unchecked_projects: [] }
-    // Pre-populate popup data from dashboard response
     popupTasks.value = res.recent_tasks || []
     popupIssues.value = res.issue_list || []
   } catch (e) {
     console.error('获取仪表盘数据失败:', e)
   } finally {
     loading.value = false
+    await nextTick()
+    renderRectChart()
   }
 }
 
@@ -430,11 +497,6 @@ const getProgressColor = (score) => {
   return '#dc2626'
 }
 
-const getRoleText = (role) => {
-  const map = { admin: '管理员', inspector: '检查员', site_supervisor: '阵地督导', field_supervisor: '驻场经理', project_staff: '项目人员' }
-  return map[role] || role
-}
-
 const rectStatusTag = (s) => {
   const map = { approved: 'success', pending: 'warning', submitted: 'primary', rejected: 'danger', ai_rejected: 'danger', ai_approved: 'success' }
   return map[s] || 'default'
@@ -445,9 +507,8 @@ const rectStatusText = (s) => {
   return map[s] || s
 }
 
-const onLogout = () => { authStore.logout() }
-
 onMounted(() => { fetchStats(); fetchNotifications() })
+onUnmounted(() => { rectChart?.dispose() })
 </script>
 
 <style scoped>
@@ -455,6 +516,10 @@ onMounted(() => { fetchStats(); fetchNotifications() })
   min-height: 100vh;
   background: #f5f7fa;
   padding-bottom: 60px;
+  width: 100%;
+  max-width: 100vw;
+  box-sizing: border-box;
+  overflow-x: hidden;       /* 兜底：防止图表/长文本撑出横向滚动条；统计卡片由 minmax(0,1fr) 保证在屏内，不会被裁 */
 }
 
 .loading-center {
@@ -464,17 +529,17 @@ onMounted(() => { fetchStats(); fetchNotifications() })
   height: 50vh;
 }
 
-/* 统计卡片 */
-.stat-grid {
+/* 统计卡片（移动端独立命名，避免命中全局 design-upgrade.css 的 .stat-grid repeat(3,1fr)!important）*/
+.m-stat-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* 严格2列：minmax(0,1fr) 允许卡片收缩到内容以下，防止横向溢出；
+     配合 .stat-card 的 min-width:0 才能真正生效 */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 10px;
   padding: 12px;
 }
 
-.stat-grid .stat-card:last-child {
-  grid-column: 1 / -1;
-}
+/* 不再让最后一张卡片占整行：保证每行严格只有2张卡片（第5张单独在最后一行左侧） */
 
 .stat-card {
   background: #fff;
@@ -484,6 +549,7 @@ onMounted(() => { fetchStats(); fetchNotifications() })
   align-items: center;
   gap: 12px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+  min-width: 0;   /* 关键：grid子元素默认min-width:auto会撑大轨道，必须置0才能让卡片收缩到列宽内 */
 }
 
 .stat-icon {
@@ -506,6 +572,8 @@ onMounted(() => { fetchStats(); fetchNotifications() })
   font-weight: 700;
   color: #1a1d26;
   line-height: 1.2;
+  min-width: 0;
+  overflow-wrap: break-word;
 }
 
 .stat-unit {
@@ -548,6 +616,8 @@ onMounted(() => { fetchStats(); fetchNotifications() })
   margin: 0 12px 12px;
   padding: 16px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+  overflow: hidden;         /* 图表/模块标签等内部内容不溢出卡片 */
+  min-width: 0;             /* 允许在flex/grid中收缩 */
 }
 
 .section-title {
@@ -578,12 +648,17 @@ onMounted(() => { fetchStats(); fetchNotifications() })
   justify-content: space-between;
   align-items: center;
   margin-bottom: 6px;
+  min-width: 0;             /* 允许score-name收缩并触发ellipsis */
 }
 
 .score-name {
   font-size: 14px;
   font-weight: 500;
   color: #1a1d26;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .score-value {
@@ -616,6 +691,10 @@ onMounted(() => { fetchStats(); fetchNotifications() })
 .module-chip-name {
   font-size: 13px;
   color: #334155;
+  max-width: 7em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .module-chip-count {
@@ -623,8 +702,6 @@ onMounted(() => { fetchStats(); fetchNotifications() })
   font-weight: 700;
   color: #2563eb;
 }
-
-.user-info { padding: 16px; }
 
 /* 通知面板 */
 .notification-page {
@@ -723,4 +800,21 @@ onMounted(() => { fetchStats(); fetchNotifications() })
 .issue-item-title { font-size: 14px; font-weight: 500; color: #1f2937; flex: 1; margin-right: 8px; }
 .issue-item-check { font-size: 13px; color: #64748b; margin-bottom: 2px; }
 .issue-item-desc { font-size: 12px; color: #94a3b8; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+</style>
+
+<!-- 非 scoped 样式：修复 Vant position="right" 弹窗的 translateY(-50%) 导致全屏弹窗内容不可见 -->
+<style>
+.notification-fullscreen.van-popup--right {
+  top: 0 !important;
+  bottom: 0 !important;
+  transform: translate3d(0, 0, 0) !important;
+}
+.notification-fullscreen.van-popup-slide-right-enter-from,
+.notification-fullscreen.van-popup-slide-right-leave-active {
+  transform: translate3d(100%, 0, 0) !important;
+}
+.notification-fullscreen.van-popup-slide-right-enter-to,
+.notification-fullscreen.van-popup-slide-right-leave-from {
+  transform: translate3d(0, 0, 0) !important;
+}
 </style>

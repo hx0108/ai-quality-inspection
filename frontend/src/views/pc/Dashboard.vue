@@ -6,47 +6,50 @@
 
     <template v-else>
       <!-- 页面标题 -->
-      <div class="page-header">
-        <div class="page-header-left">
-          <h2 class="page-title">数据概览</h2>
-          <p class="page-desc">物业品质检查核心指标一览</p>
+      <div class="phdr">
+        <div>
+          <h1>数据概览</h1>
+          <div class="phdr-sub">物业品质检查核心指标一览</div>
         </div>
-        <el-button type="primary" plain @click="exportAllData" :loading="exportingAll">
-          <el-icon style="margin-right:6px"><Download /></el-icon>导出全部报表
-        </el-button>
+        <div class="phdr-acts">
+          <button class="btn" @click="exportAllData" :disabled="exportingAll">
+            <svg viewBox="0 0 16 16"><path d="M2 3v10h12M8 7v6M5 10l3 3 3-3M2 3l3 3" /></svg>
+            {{ exportingAll ? '导出中...' : '导出全部报表' }}
+          </button>
+        </div>
       </div>
 
       <!-- 核心指标卡片 -->
       <StatsCards :summary="summary" @open-task="openTaskDrawer()" @open-coverage="openCoverageDrawer()" @open-issue="openIssueDrawer()" @open-rect="openRectDrawer()" />
 
       <!-- 各项目模块得分对比（全宽） -->
-      <div class="dash-card">
-        <div class="dash-card-header">
-          <div class="dash-card-header-left">
-            <span class="dash-card-title">各项目模块得分对比</span>
-            <span class="dash-card-sub">最新一次检查 · 点击行查看详情</span>
+      <div class="card">
+        <div class="card-h">
+          <div style="display:flex;align-items:baseline;gap:8px">
+            <span class="card-t">各项目模块得分对比</span>
+            <span class="card-d">最新一次检查 · 点击行查看详情</span>
           </div>
-          <div class="dash-card-actions">
-            <el-button size="small" text @click="exportScoreTable('excel')">
-              <el-icon style="margin-right:4px"><Document /></el-icon>导出Excel
-            </el-button>
-            <el-button size="small" text @click="exportScoreTable('csv')">
-              <el-icon style="margin-right:4px"><DocumentCopy /></el-icon>导出CSV
-            </el-button>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-sm" @click="exportScoreTable('excel')">
+              <svg viewBox="0 0 16 16"><path d="M2 3v10h12M8 7v6M5 10l3 3 3-3M2 3l3 3" /></svg>导出Excel
+            </button>
+            <button class="btn btn-sm" @click="exportScoreTable('csv')">
+              <svg viewBox="0 0 16 16"><path d="M2 3v10h12M8 7v6M5 10l3 3 3-3M2 3l3 3" /></svg>导出CSV
+            </button>
           </div>
         </div>
         <div class="module-table-wrap">
-          <el-table :data="projectScores" stripe size="small" class="module-score-table" :header-cell-style="{ background: '#F8FAFC', color: '#334155', fontWeight: 600, fontSize: '12px' }" @row-click="openProjectDrawer">
+          <el-table :data="projectScores" stripe size="small" class="module-score-table" :header-cell-style="{ background: 'var(--bg-muted)', color: 'var(--ink-900)', fontWeight: 600, fontSize: '12px' }" @row-click="openProjectDrawer">
             <el-table-column prop="project_name" label="项目名称" fixed="left" width="130" show-overflow-tooltip />
             <el-table-column v-for="m in moduleNames" :key="m.key" :label="m.label" width="95" align="center">
               <template #default="{ row }">
-                <span v-if="row.modules && row.modules[m.key] != null" class="cell-score" :class="getScoreCellClass(row.modules[m.key])">{{ row.modules[m.key] }}</span>
-                <span v-else class="text-muted">-</span>
+                <span v-if="row.modules && row.modules[m.key] != null" class="sp" :class="getSpClass(row.modules[m.key])">{{ row.modules[m.key] }}</span>
+                <span v-else class="sp sp-na">-</span>
               </template>
             </el-table-column>
             <el-table-column prop="latest_score" label="总分" fixed="right" width="80" align="center" sortable>
               <template #default="{ row }">
-                <span class="cell-score cell-total" :class="getScoreCellClass(row.latest_score)">{{ row.latest_score }}</span>
+                <span class="sp" :class="getSpClass(row.latest_score)" style="font-size:14px">{{ row.latest_score }}</span>
               </template>
             </el-table-column>
           </el-table>
@@ -55,37 +58,31 @@
       </div>
 
       <!-- 底部双栏：问题分布 + 整改统计 -->
-      <div class="charts-grid">
-        <div class="dash-card">
-          <div class="dash-card-header">
-            <div class="dash-card-header-left">
-              <span class="dash-card-title">问题按模块分布</span>
-              <span class="dash-card-sub">点击查看详情</span>
-            </div>
-            <div class="dash-card-actions">
-              <el-button size="small" text @click="exportChart('module', 'png')">
-                <el-icon style="margin-right:4px"><Picture /></el-icon>导出图片
-              </el-button>
-              <el-button size="small" text @click="exportChart('module', 'excel')">
-                <el-icon style="margin-right:4px"><Document /></el-icon>导出Excel
-              </el-button>
+      <div class="charts">
+        <div class="card">
+          <div class="card-h">
+            <span class="card-t">问题按模块分布</span>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-sm" @click="exportChart('module', 'png')">
+                <svg viewBox="0 0 16 16"><path d="M2 3v10h12M8 7v6M5 10l3 3 3-3" /></svg>导出图片
+              </button>
+              <button class="btn btn-sm" @click="exportChart('module', 'excel')">
+                <svg viewBox="0 0 16 16"><path d="M2 3v10h12M8 7v6M5 10l3 3 3-3M2 3l3 3" /></svg>导出Excel
+              </button>
             </div>
           </div>
           <div ref="moduleChartRef" class="chart-area"></div>
         </div>
-        <div class="dash-card">
-          <div class="dash-card-header">
-            <div class="dash-card-header-left">
-              <span class="dash-card-title">各项目整改完成率</span>
-              <span class="dash-card-sub">已整改 vs 未整改</span>
-            </div>
-            <div class="dash-card-actions">
-              <el-button size="small" text @click="exportChart('rect', 'png')">
-                <el-icon style="margin-right:4px"><Picture /></el-icon>导出图片
-              </el-button>
-              <el-button size="small" text @click="exportChart('rect', 'excel')">
-                <el-icon style="margin-right:4px"><Document /></el-icon>导出Excel
-              </el-button>
+        <div class="card">
+          <div class="card-h">
+            <span class="card-t">各项目整改完成率</span>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-sm" @click="exportChart('rect', 'png')">
+                <svg viewBox="0 0 16 16"><path d="M2 3v10h12M8 7v6M5 10l3 3 3-3" /></svg>导出图片
+              </button>
+              <button class="btn btn-sm" @click="exportChart('rect', 'excel')">
+                <svg viewBox="0 0 16 16"><path d="M2 3v10h12M8 7v6M5 10l3 3 3-3M2 3l3 3" /></svg>导出Excel
+              </button>
             </div>
           </div>
           <div ref="rectChartRef" class="chart-area"></div>
@@ -95,7 +92,7 @@
 
     <!-- ==================== 抽屉组件 ==================== -->
     <TaskDrawer v-model:visible="taskDrawer.visible" :all-projects="allProjects" @go-to-task="goToTask" @export="exportDrawerData('task')" ref="taskDrawerRef" />
-    <CoverageDrawer v-model:visible="coverageDrawer.visible" :checked-projects="coverageDrawer.checkedProjects" :unchecked-projects="coverageDrawer.uncheckedProjects" :checked-count="coverageDrawer.checkedCount" :total-projects="summary.total_projects || 0" :coverage-rate="summary.coverage_rate || 0" @go-to-project="goToProjectTasks" @export="exportDrawerData('coverage')" />
+    <CoverageDrawer v-model:visible="coverageDrawer.visible" :loading="coverageDrawer.loading" :checked-projects="coverageDrawer.checkedProjects" :unchecked-projects="coverageDrawer.uncheckedProjects" :checked-count="coverageDrawer.checkedCount" :total-projects="summary.total_projects || 0" :coverage-rate="summary.coverage_rate || 0" @go-to-project="goToProjectTasks" @export="exportDrawerData('coverage')" @refresh="loadCoverageDetail" />
     <IssueDrawer v-model:visible="issueDrawer.visible" @export="exportDrawerData('issue')" ref="issueDrawerRef" />
     <RectDrawer v-model:visible="rectDrawer.visible" @export="exportDrawerData('rect')" ref="rectDrawerRef" />
 
@@ -186,7 +183,7 @@ const projectRectStats = ref([])
 
 // ==================== 抽屉/弹窗状态 ====================
 const taskDrawer = ref({ visible: false, list: [], total: 0, page: 1, pageSize: 20, statusFilter: '', projectFilter: '', loading: false })
-const coverageDrawer = ref({ visible: false, checkedProjects: [], uncheckedProjects: [], checkedCount: 0 })
+const coverageDrawer = ref({ visible: false, checkedProjects: [], uncheckedProjects: [], checkedCount: 0, loading: false })
 const issueDrawer = ref({ visible: false, list: [], loading: false, severityFilter: '', moduleFilter: '', projectFilter: '', modules: [], projects: [] })
 const rectDrawer = ref({ visible: false, list: [], loading: false, statusFilter: '', keyword: '' })
 const moduleDialog = ref({ visible: false, title: '', list: [], loading: false })
@@ -433,7 +430,7 @@ const renderModuleChart = () => {
       backgroundColor: 'rgba(255, 255, 255, 0.96)',
       borderColor: '#E2E8F0',
       borderWidth: 1,
-      textStyle: { color: '#334155', fontSize: 13 },
+      textStyle: { color: '#18181b', fontSize: 13 },
       extraCssText: 'box-shadow: 0 4px 12px rgba(0,0,0,0.08); border-radius: 8px;'
     },
     grid: { left: 110, right: 20, top: 10, bottom: 20 },
@@ -441,7 +438,7 @@ const renderModuleChart = () => {
       type: 'value',
       axisLine: { show: false },
       axisTick: { show: false },
-      splitLine: { lineStyle: { color: '#F1F5F9', type: 'dashed' } },
+      splitLine: { lineStyle: { color: '#f4f4f5', type: 'dashed' } },
       axisLabel: { color: '#94A3B8' }
     },
     yAxis: {
@@ -449,7 +446,7 @@ const renderModuleChart = () => {
       data: reversed.map(i => i.module_name),
       axisLine: { show: false },
       axisTick: { show: false },
-      axisLabel: { fontSize: 12, color: '#64748B', width: 90, overflow: 'truncate' }
+      axisLabel: { fontSize: 12, color: '#52525b', width: 90, overflow: 'truncate' }
     },
     series: [{
       type: 'bar',
@@ -484,7 +481,7 @@ const renderRectChart = () => {
       backgroundColor: 'rgba(255, 255, 255, 0.96)',
       borderColor: '#E2E8F0',
       borderWidth: 1,
-      textStyle: { color: '#334155', fontSize: 13 },
+      textStyle: { color: '#18181b', fontSize: 13 },
       extraCssText: 'box-shadow: 0 4px 12px rgba(0,0,0,0.08); border-radius: 8px;',
       formatter: (params) => {
         const name = params[0].name
@@ -493,7 +490,7 @@ const renderRectChart = () => {
         const total = approved + pending
         const rate = total > 0 ? ((approved / total) * 100).toFixed(1) : 0
         return `<div style="font-weight:600;margin-bottom:4px">${name}</div>` +
-          `<div>已整改：<span style="color:#059669;font-weight:600">${approved}</span></div>` +
+          `<div>已整改：<span style="color:#16a34a;font-weight:600">${approved}</span></div>` +
           `<div>未整改：<span style="color:#dc2626;font-weight:600">${pending}</span></div>` +
           `<div style="margin-top:4px;border-top:1px solid #eee;padding-top:4px">完成率：<b>${rate}%</b></div>`
       }
@@ -502,7 +499,7 @@ const renderRectChart = () => {
       data: ['已整改', '未整改'],
       top: 0,
       right: 10,
-      textStyle: { fontSize: 12, color: '#64748B' },
+      textStyle: { fontSize: 12, color: '#52525b' },
       itemWidth: 12,
       itemHeight: 12,
       itemGap: 16
@@ -512,7 +509,7 @@ const renderRectChart = () => {
       type: 'value',
       axisLine: { show: false },
       axisTick: { show: false },
-      splitLine: { lineStyle: { color: '#F1F5F9', type: 'dashed' } },
+      splitLine: { lineStyle: { color: '#f4f4f5', type: 'dashed' } },
       axisLabel: { color: '#94A3B8' }
     },
     yAxis: {
@@ -520,7 +517,7 @@ const renderRectChart = () => {
       data: data.map(i => i.project_name),
       axisLine: { show: false },
       axisTick: { show: false },
-      axisLabel: { fontSize: 12, color: '#64748B', width: 90, overflow: 'truncate' }
+      axisLabel: { fontSize: 12, color: '#52525b', width: 90, overflow: 'truncate' }
     },
     series: [
       {
@@ -530,7 +527,7 @@ const renderRectChart = () => {
         data: data.map(i => i.approved),
         itemStyle: {
           color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
-            { offset: 0, color: '#059669' },
+            { offset: 0, color: '#16a34a' },
             { offset: 1, color: '#34D399' }
           ]),
           borderRadius: [0, 0, 0, 0]
@@ -558,10 +555,10 @@ const renderRectChart = () => {
 }
 
 // ==================== 工具函数 ====================
-const getScoreCellClass = (score) => {
-  if (score >= 90) return 'cell-good'
-  if (score >= 70) return 'cell-ok'
-  return 'cell-bad'
+const getSpClass = (score) => {
+  if (score >= 90) return 'sp-hi'
+  if (score >= 70) return 'sp-mid'
+  return 'sp-lo'
 }
 
 const getStatusText = (status) => {
@@ -603,12 +600,32 @@ const openTaskDrawer = async (statusFilter = '') => {
 
 // ==================== 抽屉2：覆盖率 ====================
 const openCoverageDrawer = async () => {
-  const detail = coverageDetail.value
   coverageDrawer.value = {
-    visible: true,
-    checkedProjects: detail.checked_projects || [],
-    uncheckedProjects: detail.unchecked_projects || [],
-    checkedCount: (detail.checked_projects || []).length,
+    visible: false,
+    checkedProjects: [],
+    uncheckedProjects: [],
+    checkedCount: 0,
+    loading: false,
+    page: 1,
+    pageSize: 20,
+    statusFilter: ''
+  }
+  await loadCoverageDetail()
+  coverageDrawer.value.visible = true
+}
+
+const loadCoverageDetail = async () => {
+  coverageDrawer.value.loading = true
+  try {
+    const res = await getDashboardStats()
+    coverageDetail.value = res.coverage_detail || { checked_projects: [], unchecked_projects: [] }
+    coverageDrawer.value.checkedProjects = coverageDetail.value.checked_projects || []
+    coverageDrawer.value.uncheckedProjects = coverageDetail.value.unchecked_projects || []
+    coverageDrawer.value.checkedCount = (coverageDetail.value.checked_projects || []).length
+  } catch (e) {
+    console.error('加载覆盖率详情失败:', e)
+  } finally {
+    coverageDrawer.value.loading = false
   }
 }
 
@@ -692,7 +709,7 @@ const renderMiniChart = (tasks) => {
       backgroundColor: 'rgba(255, 255, 255, 0.96)',
       borderColor: '#E2E8F0',
       borderWidth: 1,
-      textStyle: { color: '#334155', fontSize: 12 }
+      textStyle: { color: '#18181b', fontSize: 12 }
     },
     grid: { left: 45, right: 15, top: 10, bottom: 25 },
     xAxis: {
@@ -705,7 +722,7 @@ const renderMiniChart = (tasks) => {
     yAxis: {
       type: 'value',
       min: 0, max: 100,
-      splitLine: { lineStyle: { color: '#F1F5F9', type: 'dashed' } },
+      splitLine: { lineStyle: { color: '#f4f4f5', type: 'dashed' } },
       axisLine: { show: false },
       axisTick: { show: false },
       axisLabel: { fontSize: 10, color: '#94A3B8' }
@@ -719,11 +736,11 @@ const renderMiniChart = (tasks) => {
       lineStyle: {
         width: 2,
         color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
-          { offset: 0, color: '#059669' },
+          { offset: 0, color: '#16a34a' },
           { offset: 1, color: '#34D399' }
         ])
       },
-      itemStyle: { color: '#059669', borderWidth: 2, borderColor: '#fff' },
+      itemStyle: { color: '#16a34a', borderWidth: 2, borderColor: '#fff' },
       areaStyle: {
         color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
           { offset: 0, color: 'rgba(5, 150, 105, 0.15)' },
@@ -764,199 +781,125 @@ onUnmounted(() => {
   padding: 40px;
 }
 
-/* ==================== 页面标题 ==================== */
-.page-header {
+/* ==================== 页面标题 (prototype .phdr) ==================== */
+.phdr {
   display: flex;
+  align-items: flex-end;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 24px;
-}
-
-.page-header-left {
-  display: flex;
-  flex-direction: column;
-}
-
-.page-title {
-  font-size: 22px;
-  font-weight: 700;
-  color: #1a1d26;
-  margin: 0;
-  line-height: 1.3;
-}
-
-.page-desc {
-  font-size: 13px;
-  color: #9ba3af;
-  margin: 4px 0 0;
-}
-
-/* ==================== 统计卡片 ==================== */
-.stat-grid {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 14px;
   margin-bottom: 20px;
 }
 
-.stat-card {
-  background: #fff;
-  border-radius: 12px;
-  padding: 20px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  cursor: pointer;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
-  position: relative;
-  overflow: hidden;
-  animation: fadeInUp 0.4s ease-out both;
+.phdr h1 {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--ink-900);
+  letter-spacing: -0.4px;
+  margin: 0;
 }
 
-.stat-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: var(--accent-grad, var(--accent));
-  border-radius: 12px 12px 0 0;
-}
-
-.stat-card:nth-child(1) { animation-delay: 0s; }
-.stat-card:nth-child(2) { animation-delay: 0.05s; }
-.stat-card:nth-child(3) { animation-delay: 0.1s; }
-.stat-card:nth-child(4) { animation-delay: 0.15s; }
-.stat-card:nth-child(5) { animation-delay: 0.2s; }
-
-.stat-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.08);
-}
-
-.stat-icon-box {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  background: var(--accent-light);
-  color: var(--accent);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  transition: transform 0.25s;
-}
-
-.stat-card:hover .stat-icon-box {
-  transform: scale(1.08);
-}
-
-.stat-body {
-  flex: 1;
-  min-width: 0;
-}
-
-.stat-label {
-  display: block;
+.phdr-sub {
   font-size: 13px;
-  color: #9ba3af;
-  margin-bottom: 4px;
+  color: var(--ink-400);
+  margin-top: 3px;
 }
 
-.stat-value {
-  display: block;
-  font-size: 28px;
-  font-weight: 700;
-  color: #1a1d26;
-  line-height: 1.2;
-}
-
-.stat-unit {
-  font-size: 14px;
-  font-weight: 400;
-  color: #9ba3af;
-}
-
-.stat-tags {
+.phdr-acts {
   display: flex;
-  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* ==================== Button (prototype .btn) ==================== */
+.btn {
+  display: inline-flex;
+  align-items: center;
   gap: 6px;
-  margin-top: 6px;
-}
-
-.stat-tag {
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 10px;
-  background: #F1F5F9;
-  color: #64748B;
-}
-
-.tag-blue { background: #EFF6FF; color: #2563eb; }
-.tag-red { background: #FEF2F2; color: #dc2626; }
-.tag-orange { background: #FFF7ED; color: #ea580c; }
-.tag-green { background: #ECFDF5; color: #059669; }
-.tag-gray { background: #F8FAFC; color: #64748B; }
-
-.stat-arrow {
-  color: #CBD5E1;
-  flex-shrink: 0;
-  transition: transform 0.2s, color 0.2s;
-  font-size: 16px;
-}
-
-.stat-card:hover .stat-arrow {
-  transform: translateX(3px);
-  color: var(--accent);
-}
-
-/* ==================== 仪表盘卡片 ==================== */
-.dash-card {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
-  overflow: hidden;
-}
-
-.dash-card-header {
-  padding: 16px 20px;
-  border-bottom: 1px solid #F1F5F9;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.dash-card-header-left {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-}
-
-.dash-card-title {
-  font-size: 15px;
+  padding: 8px 16px;
+  border-radius: var(--r);
+  font-size: 14px;
   font-weight: 600;
-  color: #1a1d26;
+  cursor: pointer;
+  transition: all 0.12s var(--ease);
+  border: 1px solid var(--ink-100);
+  background: var(--bg-card);
+  color: var(--ink-800);
+  font-family: var(--sans);
 }
 
-.dash-card-sub {
+.btn:hover {
+  background: var(--bg-muted);
+  border-color: var(--ink-200);
+}
+
+.btn svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.8;
+}
+
+.btn-sm {
+  padding: 5px 10px;
   font-size: 12px;
-  color: #9ba3af;
 }
 
-.dash-card-actions {
+.btn-sm svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* ==================== Card (prototype .card) ==================== */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--ink-100);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  margin-bottom: 14px;
+  animation: kpiIn 0.3s var(--ease) 0.05s both;
+}
+
+.card-h {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--ink-100);
   display: flex;
   align-items: center;
-  gap: 4px;
+  justify-content: space-between;
 }
 
-/* ==================== 图表 ==================== */
-.charts-grid {
+.card-t {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink-900);
+}
+
+.card-d {
+  font-size: 12px;
+  color: var(--ink-400);
+  margin-left: 8px;
+}
+
+/* ==================== Score pills (prototype .sp) ==================== */
+.sp {
+  display: inline-block;
+  min-width: 32px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.sp-hi { background: var(--ok-bg); color: var(--ok); }
+.sp-mid { background: var(--warn-bg); color: var(--warn); }
+.sp-lo { background: var(--err-bg); color: var(--err); }
+.sp-na { color: var(--ink-200); }
+
+/* ==================== Charts grid ==================== */
+.charts {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  margin-top: 16px;
+  gap: 14px;
 }
 
 .chart-area {
@@ -964,7 +907,7 @@ onUnmounted(() => {
   padding: 8px;
 }
 
-/* ==================== 模块得分对比表 ==================== */
+/* ==================== Module table ==================== */
 .module-table-wrap {
   padding: 0;
 }
@@ -974,41 +917,25 @@ onUnmounted(() => {
   cursor: pointer;
 }
 
-.cell-score {
-  display: inline-block;
-  min-width: 32px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 13px;
-  font-weight: 600;
-  text-align: center;
+/* Table header override */
+.card :deep(.el-table) {
+  --el-table-border-color: var(--ink-100);
+  --el-table-header-bg-color: var(--bg-muted);
 }
 
-.cell-total {
-  font-size: 14px;
+.card :deep(.el-table th.el-table__cell) {
+  font-size: 12px;
   font-weight: 700;
+  color: var(--ink-400);
+  letter-spacing: 0.3px;
+  background: var(--bg-muted);
 }
 
-.cell-good {
-  background: #ECFDF5;
-  color: #059669;
+.card :deep(.el-table td.el-table__cell) {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink-600);
 }
-
-.cell-ok {
-  background: #FFFBEB;
-  color: #D97706;
-}
-
-.cell-bad {
-  background: #FEF2F2;
-  color: #DC2626;
-}
-
-/* ==================== 得分颜色 ==================== */
-.score-good { color: #059669; font-weight: 600; }
-.score-ok { color: #f59e0b; font-weight: 600; }
-.score-bad { color: #dc2626; font-weight: 600; }
-.text-muted { color: #9ba3af; }
 
 /* ==================== 抽屉通用样式 ==================== */
 .drawer-filter {
@@ -1039,12 +966,12 @@ onUnmounted(() => {
 /* 覆盖率 */
 .coverage-summary {
   flex: 1;
-  background: #f0f9ff;
+  background: var(--blue-bg);
   border: 1px solid #bae6fd;
   border-radius: 10px;
   padding: 14px 18px;
   font-size: 14px;
-  color: #1a1d26;
+  color: var(--ink-900);
 }
 
 .coverage-grid {
@@ -1058,7 +985,7 @@ onUnmounted(() => {
   font-weight: 600;
   margin-bottom: 10px;
   padding-bottom: 6px;
-  border-bottom: 2px solid #e5e7eb;
+  border-bottom: 2px solid var(--ink-200);
 }
 
 .coverage-item {
@@ -1076,23 +1003,23 @@ onUnmounted(() => {
 }
 
 .coverage-item.clickable:hover {
-  background: #f0fdf4;
+  background: var(--ok-bg);
 }
 
 .coverage-name {
   font-size: 13px;
   font-weight: 500;
-  color: #1a1d26;
+  color: var(--ink-900);
 }
 
 .coverage-date {
   font-size: 12px;
-  color: #9ba3af;
+  color: var(--ink-400);
 }
 
 .coverage-empty {
   font-size: 13px;
-  color: #9ba3af;
+  color: var(--ink-400);
   text-align: center;
   padding: 20px 0;
 }
@@ -1100,19 +1027,19 @@ onUnmounted(() => {
 /* 问题展开行 */
 .issue-expand {
   padding: 12px 20px;
-  background: #fafbfc;
+  background: var(--bg);
   border-radius: 6px;
 }
 
 .expand-row {
   font-size: 13px;
-  color: #334155;
+  color: var(--ink-900);
   line-height: 1.6;
   margin-bottom: 6px;
 }
 
 .expand-label {
-  color: #6b7280;
+  color: var(--ink-600);
   font-weight: 500;
   margin-right: 4px;
 }
@@ -1132,7 +1059,7 @@ onUnmounted(() => {
 .mini-chart-label {
   font-size: 13px;
   font-weight: 600;
-  color: #1a1d26;
+  color: var(--ink-900);
   margin-bottom: 8px;
 }
 
@@ -1144,20 +1071,18 @@ onUnmounted(() => {
 }
 
 /* ==================== 动画 ==================== */
-@keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(10px); }
+@keyframes kpiIn {
+  from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
 /* ==================== 响应式 ==================== */
 @media (max-width: 1200px) {
-  .stat-grid { grid-template-columns: repeat(3, 1fr); }
-  .charts-grid { grid-template-columns: 1fr; }
+  .charts { grid-template-columns: 1fr; }
   .coverage-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 900px) {
-  .stat-grid { grid-template-columns: repeat(2, 1fr); }
-  .page-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .phdr { flex-direction: column; align-items: flex-start; gap: 12px; }
 }
 </style>

@@ -170,17 +170,20 @@ import { useRouter, useRoute } from 'vue-router'
 import { showToast, showSuccessToast, closeToast } from 'vant'
 import { getModuleScoringStatus, getModuleDetail, editScore, rescoreModule, exportScoringExcel } from '../../api/scoring'
 import { generateReport as apiGenerateReport } from '../../api/report'
+import { getAuthToken } from '../../utils/authStorage'
+import { usePolling } from '../../composables/usePolling'
 
 const router = useRouter()
 const route = useRoute()
 const taskId = route.params.taskId
-const authToken = computed(() => localStorage.getItem('token') || '')
+const authToken = computed(() => getAuthToken())
 
 const moduleList = ref([])
 const totalScore = ref(0)
 const scoredCount = ref(0)
 const totalModuleCount = ref(8)
-let pollingTimer = null
+// 统一轮询管理：自动在卸载/路由离开时清理（修复手势返回泄漏）
+const { schedule: schedulePoll, stop: stopPoll } = usePolling()
 
 // 明细弹窗
 const showDetail = ref(false)
@@ -328,15 +331,17 @@ const fetchModuleStatus = async () => {
 
 
 let pollingCount = 0
+let pollingActive = false
 const startPolling = () => {
-  if (pollingTimer) return
+  if (pollingActive) return
+  pollingActive = true
   pollingCount = 0
   const doPoll = async () => {
     await fetchModuleStatus()
     const hasScoring = moduleList.value.some(m => m.scoring_status === 'scoring')
     if (!hasScoring) {
-      clearTimeout(pollingTimer)
-      pollingTimer = null
+      pollingActive = false
+      stopPoll()
       // 清空缓存，下次点击模块时重新加载
       resultsCache.value = {}
       return
@@ -344,9 +349,9 @@ const startPolling = () => {
     // 动态间隔：前5次1秒，之后逐渐增加到4秒
     pollingCount++
     const interval = pollingCount <= 5 ? 1000 : Math.min(4000, 1000 + (pollingCount - 5) * 600)
-    pollingTimer = setTimeout(doPoll, interval)
+    schedulePoll(doPoll, interval)
   }
-  pollingTimer = setTimeout(doPoll, 1000)
+  schedulePoll(doPoll, 1000)
 }
 
 const getModuleTagType = (status) => {
@@ -381,10 +386,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  if (pollingTimer) {
-    clearTimeout(pollingTimer)
-    pollingTimer = null
-  }
+  // 定时器清理已由 usePolling 自动处理
   // 使用 Vant API 正确关闭弹窗，避免破坏 Vant 内部单例状态
   closeToast()
 })

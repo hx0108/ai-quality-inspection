@@ -73,7 +73,9 @@ def init_db():
     _migrate_scoring_directives()  # 评分修正指令表（自我改进）
     _migrate_prompt_templates()    # Prompt版本管理表
     _migrate_rectification_round() # 整改多轮次字段
+    _migrate_rectification_deadline()  # 整改截止日期+提醒状态
     _migrate_photo_metadata()      # 照片水印元数据字段
+    _migrate_system_settings()     # 系统设置表（API KEY 管理）
 
 
 def _migrate_users_must_change_pwd():
@@ -679,3 +681,68 @@ def _migrate_photo_metadata():
                 except Exception as e:
                     logger.debug(f"Skip {col_name}: {e}")
         conn.commit()
+
+
+def _migrate_rectification_deadline():
+    """为 rectifications 表添加 deadline 和 reminder_sent 列，并回填历史数据"""
+    from sqlalchemy import text
+    from datetime import datetime, timedelta
+    with engine.connect() as conn:
+        result = conn.execute(text("PRAGMA table_info(rectifications)"))
+        existing_cols = {row[1] for row in result.fetchall()}
+
+        if 'deadline' not in existing_cols:
+            conn.execute(text("ALTER TABLE rectifications ADD COLUMN deadline VARCHAR(10)"))
+            conn.commit()
+            logger.info("Added column: deadline to rectifications")
+
+        if 'reminder_sent' not in existing_cols:
+            conn.execute(text("ALTER TABLE rectifications ADD COLUMN reminder_sent VARCHAR(20)"))
+            conn.commit()
+            logger.info("Added column: reminder_sent to rectifications")
+
+        # 回填：从 task 的 check_date + 30天 写入 deadline（只更新 deadline 为 NULL 的记录）
+        backfill_result = conn.execute(text(
+            "SELECT r.rectification_id, t.check_date "
+            "FROM rectifications r "
+            "JOIN inspection_tasks t ON r.task_id = t.task_id "
+            "WHERE r.deadline IS NULL AND t.check_date IS NOT NULL"
+        ))
+        rows = backfill_result.fetchall()
+        count = 0
+        for row in rows:
+            try:
+                check_dt = datetime.strptime(row[1], "%Y-%m-%d")
+                deadline = (check_dt + timedelta(days=30)).strftime("%Y-%m-%d")
+                conn.execute(text(
+                    "UPDATE rectifications SET deadline = :deadline WHERE rectification_id = :rid"
+                ), {"deadline": deadline, "rid": row[0]})
+                count += 1
+            except (ValueError, TypeError):
+                pass
+        if count > 0:
+            conn.commit()
+            logger.info(f"Backfilled deadline for {count} rectification records")
+
+
+def _migrate_system_settings():
+    """创建 system_settings 表（运行时可编辑的系统配置，如 API KEY）"""
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS system_settings (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    key VARCHAR(100) UNIQUE NOT NULL,
+                    value TEXT NOT NULL,
+                    updated_by INTEGER,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_system_settings_key ON system_settings(key)"
+            ))
+            conn.commit()
+            logger.info("system_settings table ready")
+        except Exception as e:
+            logger.debug(f"Skip system_settings: {e}")

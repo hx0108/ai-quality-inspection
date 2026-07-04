@@ -1022,6 +1022,16 @@ async def complete_record(
     ).all() if issue_ids else []
     existing_rect_map = {r.issue_id: r for r in existing_rects}
 
+    # 计算整改截止日期 = 检查日期 + 30天
+    from datetime import timedelta
+    deadline = None
+    if task and task.check_date:
+        try:
+            check_dt = datetime.strptime(task.check_date, "%Y-%m-%d")
+            deadline = (check_dt + timedelta(days=30)).strftime("%Y-%m-%d")
+        except (ValueError, TypeError):
+            pass
+
     for issue in issues:
         if issue.issue_id not in existing_rect_map:
             rect = Rectification(
@@ -1029,7 +1039,8 @@ async def complete_record(
                 issue_id=issue.issue_id,
                 record_id=record_id,
                 task_id=record.task_id,
-                status="pending"
+                status="pending",
+                deadline=deadline
             )
             db.add(rect)
     db.commit()
@@ -1192,4 +1203,107 @@ async def recall_module(
         "record_id": record_id,
         "module_name": module_name,
         "status": "in_progress"
+    }
+
+
+class RecallItemRequest(BaseModel):
+    item_id: str
+
+
+@router.put("/{record_id}/recall-item", summary="退回单个检查项（管理员）")
+async def recall_item(
+    record_id: str,
+    body: RecallItemRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    退回模块中的单个检查项，让检查人员重新填写该项。
+    仅管理员/督导可操作。会清除该项的评分、整改、问题记录。
+    """
+    if current_user.role not in ["admin", "site_supervisor"]:
+        raise HTTPException(status_code=403, detail="仅管理员或督导可退回检查项")
+
+    record = db.query(InspectionRecord).filter(InspectionRecord.record_id == record_id).first()
+    if not record:
+        raise HTTPException(status_code=404, detail="记录不存在")
+
+    if record.status != "completed":
+        raise HTTPException(status_code=400, detail="只能退回已完成模块中的检查项")
+
+    from models.models import Rectification, ScoringResult
+
+    item_id = body.item_id
+    task_id = record.task_id
+    module_name = record.module_name
+
+    # 1. 删除该项的整改记录（含整改照片）
+    issue = db.query(Issue).filter(
+        Issue.record_id == record_id,
+        Issue.item_id == item_id
+    ).first()
+    if issue:
+        # 删除整改照片
+        rects = db.query(Rectification).filter(Rectification.issue_id == issue.issue_id).all()
+        for rect in rects:
+            rect_photos = db.query(Photo).filter(
+                Photo.issue_id == rect.issue_id,
+                Photo.photo_type == "整改照片"
+            ).all()
+            for photo in rect_photos:
+                if photo.file_path and os.path.exists(photo.file_path):
+                    try:
+                        os.remove(photo.file_path)
+                    except Exception:
+                        pass
+                db.delete(photo)
+        db.query(Rectification).filter(Rectification.issue_id == issue.issue_id).delete(synchronize_session=False)
+
+        # 删除问题照片
+        issue_photos = db.query(Photo).filter(
+            Photo.issue_id == issue.issue_id,
+            Photo.photo_type == "问题照片"
+        ).all()
+        for photo in issue_photos:
+            if photo.file_path and os.path.exists(photo.file_path):
+                try:
+                    os.remove(photo.file_path)
+                except Exception:
+                    pass
+            db.delete(photo)
+        # 删除问题记录
+        db.delete(issue)
+
+    # 2. 删除该项的评分结果
+    db.query(ScoringResult).filter(
+        ScoringResult.record_id == record_id,
+        ScoringResult.module_name == module_name,
+        ScoringResult.item_id == item_id
+    ).delete()
+
+    # 3. 重置 data_json 中该项状态为 pending
+    data = json.loads(record.data_json) if record.data_json else {}
+    items_map = data.get("items", {})
+    if item_id in items_map:
+        items_map[item_id]["status"] = "pending"
+        items_map[item_id]["qualified"] = False
+        record.data_json = json.dumps(data, ensure_ascii=False)
+
+    db.commit()
+
+    # 4. 重算任务总分 + 清缓存
+    try:
+        from api.scoring import _compute_and_save_total_score, _invalidate_scoring_cache
+        _compute_and_save_total_score(task_id)
+        _invalidate_scoring_cache(task_id)
+    except Exception:
+        pass
+
+    item_name = items_map.get(item_id, {}).get("item_name", item_id) if item_id in items_map else item_id
+
+    return {
+        "message": f"检查项「{item_name}」已退回，检查人员可重新填写",
+        "record_id": record_id,
+        "item_id": item_id,
+        "item_name": item_name
     }

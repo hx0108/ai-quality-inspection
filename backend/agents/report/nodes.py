@@ -128,6 +128,7 @@ async def collect_data(state: dict) -> dict:
         logger.info(f"collect_data 完成: {len(module_scores)} 个模块, 总分 {project_total:.2f}")
 
         return {
+            "project_id": task.project_id,
             "project_name": task.project.name if task.project else "",
             "check_date": task.check_date,
             "standard_type": task.standard_type or "diecheng",
@@ -157,11 +158,13 @@ async def analyze_module(state: dict) -> dict:
     """
     节点2: 单模块分析（并行执行）
     通过 Send 传入单个模块的数据
+    注入该项目历史记忆（长期记忆），使分析能识别反复出现的问题和趋势
     """
     module_name = state["module_name"]
     module_pct_score = state["module_pct_score"]
     items_summary = state["items_summary"]
     task_id = state["task_id"]
+    project_id = state.get("project_id")
 
     logger.info(f"analyze_module: {module_name} ({module_pct_score:.2f}分)")
 
@@ -181,10 +184,19 @@ async def analyze_module(state: dict) -> dict:
             "module_analyses": [result],
         }
 
+    # 读取该项目该模块的历史记忆（零风险：无记忆则返回空串，prompt不变）
+    memory_context = ""
+    if project_id:
+        try:
+            from core.long_memory import get_memory_context_for_scoring
+            memory_context = get_memory_context_for_scoring(project_id, module_name)
+        except Exception as e:
+            logger.warning(f"读取记忆失败 {module_name}: {e}")
+
     try:
         deepseek = DeepSeekClient()
         analysis = await deepseek.analyze_module(
-            module_name, module_pct_score, items_summary
+            module_name, module_pct_score, items_summary, memory_context
         )
         result = {
             "module_name": module_name,
@@ -194,6 +206,27 @@ async def analyze_module(state: dict) -> dict:
             "improvement_suggestions": analysis.get("improvement_suggestions", [])
         }
         logger.info(f"模块分析完成: {module_name}")
+
+        # 回写洞察记忆：仅当模块有显著问题时保存（避免噪声）
+        if project_id and module_pct_score < 90 and analysis.get("main_issues"):
+            try:
+                from core.long_memory import LongMemory, MemoryType
+                LongMemory.add_memory(
+                    project_id=project_id,
+                    memory_type=MemoryType.INSIGHT,
+                    content={
+                        "module": module_name,
+                        "score": round(module_pct_score, 2),
+                        "main_issues": analysis["main_issues"][:3],
+                        "check_date": state.get("check_date", ""),
+                    },
+                    summary=f"{module_name}模块{module_pct_score:.1f}分：{analysis['main_issues'][0][:40] if analysis['main_issues'] else ''}",
+                    module_name=module_name,
+                    task_id=task_id,
+                    confidence=0.7,
+                )
+            except Exception as e:
+                logger.warning(f"回写洞察记忆失败 {module_name}: {e}")
     except Exception as e:
         logger.error(f"模块分析失败 {module_name}: {e}")
         result = {

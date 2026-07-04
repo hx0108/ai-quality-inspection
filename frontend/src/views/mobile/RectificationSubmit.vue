@@ -135,7 +135,7 @@
 
       <!-- 整改说明 -->
       <div class="section">
-        <div class="section-title">整改说明</div>
+        <div class="section-title">整改说明 <span class="required">*</span></div>
         <van-field
           v-model="rectificationNote"
           type="textarea"
@@ -148,7 +148,7 @@
 
       <!-- 整改时间 -->
       <div class="section">
-        <div class="section-title">整改完成时间</div>
+        <div class="section-title">整改完成时间 <span class="required">*</span></div>
         <van-field
           v-model="rectificationTime"
           is-link
@@ -159,7 +159,8 @@
         <van-popup v-model:show="showTimePicker" position="bottom" round>
           <van-date-picker
             v-model="selectedDate"
-            title="选择日期"
+            title="选择整改完成时间"
+            :columns-type="['year', 'month', 'day', 'hour', 'minute']"
             :min-date="minDate"
             :max-date="maxDate"
             @confirm="onDateConfirm"
@@ -175,12 +176,57 @@
           block
           round
           :loading="submitting"
-          :disabled="fileList.length === 0"
+          :disabled="fileList.length === 0 || !rectificationNote.trim() || !rectificationTime"
           @click="onSubmit"
         >
           提交整改
         </van-button>
       </div>
+      </template>
+
+      <!-- 非 pending 状态：只读展示已提交的整改材料 -->
+      <template v-if="detail.status !== 'pending'">
+        <!-- 已提交整改照片 -->
+        <div v-if="detail.rectification_photos && detail.rectification_photos.length" class="section">
+          <div class="section-title">整改照片</div>
+          <div class="photo-grid">
+            <van-image
+              v-for="p in detail.rectification_photos"
+              :key="p.photo_id"
+              width="80"
+              height="80"
+              radius="6"
+              fit="cover"
+              :src="getPhotoUrlSync(p.photo_id)"
+              @click="previewPhoto(getPhotoUrlSync(p.photo_id))"
+            >
+              <template #error>
+                <div class="photo-loading">加载中...</div>
+              </template>
+            </van-image>
+          </div>
+        </div>
+
+        <!-- 整改说明 -->
+        <div v-if="detail.rectification_note" class="section">
+          <div class="section-title">整改说明</div>
+          <div class="info-card">{{ detail.rectification_note }}</div>
+        </div>
+
+        <!-- 整改时间 -->
+        <div v-if="detail.rectification_time" class="section">
+          <div class="section-title">整改完成时间</div>
+          <div class="info-card">{{ detail.rectification_time }}</div>
+        </div>
+
+        <!-- 审核意见 -->
+        <div v-if="detail.review_note" class="section">
+          <div class="section-title">审核意见</div>
+          <div class="info-card">
+            {{ detail.review_note }}
+            <span v-if="detail.reviewer_name" class="reviewer-name">（{{ detail.reviewer_name }}）</span>
+          </div>
+        </div>
       </template>
     </div>
 
@@ -200,6 +246,7 @@ import {
 } from '../../api/rectification'
 import WatermarkCamera from '../../components/WatermarkCamera.vue'
 import { useAuthStore } from '../../stores/auth'
+import { getAuthToken } from '../../utils/authStorage'
 
 const route = useRoute()
 const router = useRouter()
@@ -214,41 +261,22 @@ const rectificationNote = ref('')
 const rectificationTime = ref('')
 const showTimePicker = ref(false)
 const submitting = ref(false)
-const uploadedPhotoIds = ref([])
 
 // 日期选择
 const now = new Date()
 const selectedDate = ref([
   String(now.getFullYear()),
   String(now.getMonth() + 1).padStart(2, '0'),
-  String(now.getDate()).padStart(2, '0')
+  String(now.getDate()).padStart(2, '0'),
+  String(now.getHours()).padStart(2, '0'),
+  String(now.getMinutes()).padStart(2, '0')
 ])
 const minDate = new Date(2024, 0, 1)
 const maxDate = new Date()
 
-const photoSignCache = new Map() // photoId -> {url, expires_at}
-
-const getPhotoUrl = async (photoId) => {
-  // 检查缓存是否有效
-  const cached = photoSignCache.get(photoId)
-  if (cached && Date.now() < cached.expires_at) {
-    return cached.url
-  }
-  // 获取签名
-  try {
-    const res = await request.get(`/records/photos/${photoId}/sign`)
-    const url = `/api/v1/records/photos/${photoId}?sign=${res.sign}&expires=${res.expires}`
-    photoSignCache.set(photoId, { url, expires_at: (parseInt(res.expires) - 30) * 1000 })
-    return url
-  } catch {
-    // 降级：使用 Bearer header（不暴露在URL中）
-    return null
-  }
-}
-
 // 照片预览用同步方式（token 参数，和 PC 端一致）
 const getPhotoUrlSync = (photoId) => {
-  const t = localStorage.getItem('token')
+  const t = getAuthToken()
   return `/api/v1/records/photos/${photoId}?token=${t}`
 }
 
@@ -256,58 +284,33 @@ const previewPhoto = (url) => {
   imagePreviewInstance = showImagePreview([url])
 }
 
-const onOversize = () => {
-  showToast('照片大小不能超过10MB')
-}
-
-const onAfterRead = async (file) => {
-  const files = Array.isArray(file) ? file : [file]
-  for (const f of files) {
-    f.status = 'uploading'
-    try {
-      const res = await uploadRectificationPhoto(rectificationId, f.file)
-      f.status = 'done'
-      uploadedPhotoIds.value.push(res.photo_id)
-    } catch (e) {
-      f.status = 'failed'
-      f.message = '上传失败'
-      showToast('照片上传失败')
-    }
+// 水印拍摄 / 拍照 / 相册选择 — 仅存本地，提交时统一上传（与巡检一致）
+const onWatermarkPhotoAdded = (photoData) => {
+  if (fileList.value.length >= 5) {
+    showToast('最多上传5张照片')
+    return
   }
-}
-
-// 水印拍摄 / 拍照 / 相册选择 — 即时上传
-const onWatermarkPhotoAdded = async (photoData) => {
-  const entry = { ...photoData, status: 'uploading' }
-  fileList.value.push(entry)
-  try {
-    const res = await uploadRectificationPhoto(rectificationId, photoData.file, photoData.metadata || {})
-    entry.status = 'done'
-    uploadedPhotoIds.value.push(res.photo_id)
-  } catch (e) {
-    entry.status = 'failed'
-    entry.message = '上传失败'
-    showToast('照片上传失败')
-  }
+  fileList.value.push({ ...photoData })
 }
 
 const onDeletePhoto = async (file, index) => {
-  const photoId = uploadedPhotoIds.value[index]
-  if (photoId) {
+  const entry = fileList.value[index]
+  // 已上传到服务器的照片需调API删除
+  if (entry.isExisting && entry.photo_id) {
     try {
-      await deleteRectificationPhoto(rectificationId, photoId)
-      uploadedPhotoIds.value.splice(index, 1)
-      return true
+      await deleteRectificationPhoto(rectificationId, entry.photo_id)
     } catch (e) {
       showToast('删除失败')
       return false
     }
   }
+  fileList.value.splice(index, 1)
   return true
 }
 
 const onDateConfirm = ({ selectedValues }) => {
-  rectificationTime.value = selectedValues.join('-')
+  const [y, m, d, h, min] = selectedValues
+  rectificationTime.value = `${y}-${m}-${d} ${h}:${min}`
   showTimePicker.value = false
 }
 
@@ -316,23 +319,24 @@ const onSubmit = async () => {
     showToast('请上传至少一张整改照片')
     return
   }
-
-  // 检查是否有上传失败的
-  const hasFailed = fileList.value.some(f => f.status === 'failed')
-  if (hasFailed) {
-    showToast('有照片上传失败，请删除后重试')
+  if (!rectificationNote.value.trim()) {
+    showToast('请填写整改说明')
     return
   }
-
-  // 检查是否有正在上传的
-  const uploading = fileList.value.some(f => f.status === 'uploading')
-  if (uploading) {
-    showToast('照片上传中，请等待')
+  if (!rectificationTime.value) {
+    showToast('请选择整改完成时间')
     return
   }
 
   submitting.value = true
   try {
+    // 提交时统一上传新照片（已有照片跳过）
+    for (const photo of fileList.value) {
+      if (!photo.isExisting && photo.file) {
+        await uploadRectificationPhoto(rectificationId, photo.file, photo.metadata || {})
+      }
+    }
+    // 提交整改（触发AI核查）
     await submitRectification(rectificationId, {
       rectification_note: rectificationNote.value,
       rectification_time: rectificationTime.value
@@ -354,22 +358,13 @@ const fetchData = async () => {
     // 回填已提交的数据（驳回后重新编辑）
     if (res.rectification_note) rectificationNote.value = res.rectification_note
     if (res.rectification_time) rectificationTime.value = res.rectification_time
-    // 回填已有整改照片
+    // 回填已有整改照片（驳回后重新编辑场景）
     if (res.rectification_photos && res.rectification_photos.length) {
       fileList.value = res.rectification_photos.map(p => ({
-        url: '',
-        status: 'uploading',
+        url: getPhotoUrlSync(p.photo_id),
+        isExisting: true,
         photo_id: p.photo_id
       }))
-      uploadedPhotoIds.value = res.rectification_photos.map(p => p.photo_id)
-      // 异步加载签名URL
-      for (const f of fileList.value) {
-        const url = await getPhotoUrl(f.photo_id)
-        if (url) {
-          f.url = url
-          f.status = 'done'
-        }
-      }
     }
   } catch (e) {
     showToast('加载失败')
@@ -577,5 +572,11 @@ onUnmounted(() => {
   padding: 12px 16px;
   background: #fff;
   border-top: 1px solid #e5e7eb;
+}
+
+.reviewer-name {
+  font-size: 12px;
+  color: #9ba3af;
+  margin-left: 4px;
 }
 </style>

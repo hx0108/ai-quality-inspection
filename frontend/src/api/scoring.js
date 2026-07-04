@@ -1,4 +1,5 @@
 import request from '../utils/request'
+import { getAuthToken } from '../utils/authStorage'
 
 // 开始评分
 export function startScoring(taskId) {
@@ -42,7 +43,7 @@ export function rescoreModule(taskId, moduleName) {
 
 // 导出评分结果Excel
 export function exportScoringExcel(taskId) {
-  const token = localStorage.getItem('token')
+  const token = getAuthToken()
   const url = `/api/v1/scoring/export/${taskId}`
   return fetch(url, {
     headers: { Authorization: `Bearer ${token}` }
@@ -50,4 +51,9 @@ export function exportScoringExcel(taskId) {
     if (!res.ok) throw new Error('导出失败')
     return res.blob()
   })
+}
+
+// 评分复核：获取待复核列表
+export function getAllPendingReviews(params) {
+  return request.get('/scoring/review-queue', { params })
 }

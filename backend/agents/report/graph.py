@@ -23,6 +23,8 @@ def fan_out_analyze(state: dict) -> list[Send]:
     module_scores = state.get("module_scores", [])
     modules_data = state.get("modules_data", {})
     task_id = state["task_id"]
+    project_id = state.get("project_id")
+    check_date = state.get("check_date", "")
     modules_done = state.get("modules_done", 0)
 
     sends = []
@@ -46,6 +48,8 @@ def fan_out_analyze(state: dict) -> list[Send]:
 
         sends.append(Send("analyze_module", {
             "task_id": task_id,
+            "project_id": project_id,
+            "check_date": check_date,
             "module_name": module_name,
             "module_pct_score": module["module_pct_score"],
             "items_summary": items_summary,

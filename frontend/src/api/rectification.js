@@ -69,5 +69,5 @@ export function exportRectificationsExcel({ statusFilter, projectName, moduleNam
   if (projectName) params.project_name = projectName
   if (moduleName) params.module_name = moduleName
   if (keyword) params.keyword = keyword
-  return request.get('/rectifications/export/excel', { params, responseType: 'blob' })
+  return request.get('/rectifications/export/excel', { params, responseType: 'blob', timeout: 300000 })
 }

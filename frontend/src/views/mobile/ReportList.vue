@@ -60,27 +60,17 @@
       <van-tabbar-item icon="bar-chart-o" to="/analysis-mobile">分析</van-tabbar-item>
     </van-tabbar>
 
-    <van-action-sheet v-model:show="showUser" title="个人信息">
-      <div class="user-info">
-        <van-cell title="用户名" :value="user.username" />
-        <van-cell title="姓名" :value="user.real_name" />
-        <van-cell title="角色" :value="getRoleText(user.role)" />
-        <van-button block type="danger" @click="onLogout" style="margin-top: 20px">
-          退出登录
-        </van-button>
-      </div>
-    </van-action-sheet>
+    <MobileUserSheet v-model:show="showUser" />
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { useAuthStore } from '../../stores/auth'
+import MobileUserSheet from '../../components/MobileUserSheet.vue'
 import { getReportList } from '../../api/report'
 
 const router = useRouter()
-const authStore = useAuthStore()
 
 const reports = ref([])
 const loading = ref(false)
@@ -91,8 +81,6 @@ const showUser = ref(false)
 const page = ref(1)
 const projectFilter = ref('')
 let loadLock = false  // 防止并发重复加载
-
-const user = computed(() => authStore.user)
 
 const projectOptions = computed(() => {
   const projects = [...new Set(reports.value.map(r => r.project_name).filter(Boolean))].sort()
@@ -146,10 +134,6 @@ const onBack = () => {
   router.push('/tasks')
 }
 
-const onLogout = () => {
-  authStore.logout()
-}
-
 const formatDate = (isoStr) => {
   if (!isoStr) return ''
   return isoStr.slice(0, 10)
@@ -161,17 +145,6 @@ const getScoreClass = (score) => {
   if (score >= 80) return 'score-good'
   if (score >= 60) return 'score-normal'
   return 'score-poor'
-}
-
-const getRoleText = (role) => {
-  const map = {
-    admin: '管理员',
-    inspector: '检查员',
-    site_supervisor: '阵地督导',
-    field_supervisor: '驻场经理',
-    project_staff: '项目人员'
-  }
-  return map[role] || role
 }
 
 onMounted(() => {
@@ -250,7 +223,4 @@ onMounted(() => {
   font-size: 18px;
 }
 
-.user-info {
-  padding: 16px;
-}
 </style>

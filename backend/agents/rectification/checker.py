@@ -10,6 +10,9 @@ from typing import List, Dict, Any, Optional
 
 from config import settings
 
+import logging
+logger = logging.getLogger(__name__)
+
 
 async def check_rectification(
     issue_description: str,
@@ -188,12 +191,19 @@ async def check_rectification(
                         },
                         {"role": "user", "content": content_parts}
                     ],
-                    "temperature": 0.1
+                    "temperature": 0.1,
+                    "enable_thinking": False
                 }
             )
 
         if response.status_code != 200:
-            return _default_result(False, f"API调用失败: {response.status_code}")
+            try:
+                err_body = response.json()
+                err_msg = err_body.get("error", {}).get("message", response.text[:300])
+            except Exception:
+                err_msg = response.text[:300]
+            logger.error(f"DashScope API {response.status_code}: {err_msg}")
+            return _default_result(False, f"API调用失败({response.status_code}): {err_msg}")
 
         result = response.json()
         duration = int((_time.time() - start) * 1000)
@@ -231,13 +241,37 @@ async def check_rectification(
         return _default_result(False, f"AI核查异常: {str(e)}")
 
 
-def _encode_image(file_path: str) -> Optional[str]:
-    """将图片文件编码为 base64"""
+def _encode_image(file_path: str, max_size: int = 1024, quality: int = 75) -> Optional[str]:
+    """将图片文件压缩后编码为 base64（避免原始照片过大导致 API 400）"""
     import os
+    from io import BytesIO
+    from PIL import Image
+
     if not os.path.exists(file_path):
         return None
-    with open(file_path, "rb") as f:
-        return base64.b64encode(f.read()).decode("utf-8")
+
+    try:
+        img = Image.open(file_path)
+        # 转换 RGBA/P 为 RGB
+        if img.mode in ("RGBA", "P"):
+            img = img.convert("RGB")
+
+        # 等比缩放，长边不超过 max_size
+        w, h = img.size
+        if max(w, h) > max_size:
+            ratio = max_size / max(w, h)
+            img = img.resize((int(w * ratio), int(h * ratio)), Image.LANCZOS)
+
+        buf = BytesIO()
+        img.save(buf, format="JPEG", quality=quality)
+        return base64.b64encode(buf.getvalue()).decode("utf-8")
+    except Exception as e:
+        # 回退：直接读取原始文件
+        try:
+            with open(file_path, "rb") as f:
+                return base64.b64encode(f.read()).decode("utf-8")
+        except Exception:
+            return None
 
 
 def _default_result(qualified: bool, reason: str) -> Dict[str, Any]:

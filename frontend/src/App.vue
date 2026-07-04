@@ -32,6 +32,45 @@ onUnmounted(() => {
 </script>
 
 <style>
+/* ===== 设计系统变量 ===== */
+:root {
+  --bg: #fafaf8;
+  --bg-card: #fff;
+  --bg-hover: #f3f2ef;
+  --bg-muted: #f5f4f1;
+  --ink-900: #18181b;
+  --ink-800: #27272a;
+  --ink-600: #52525b;
+  --ink-400: #a1a1aa;
+  --ink-300: #d4d4d8;
+  --ink-200: #e4e4e7;
+  --ink-100: #f4f4f5;
+  --teal-700: #0f766e;
+  --teal-600: #0d9488;
+  --teal-500: #14b8a6;
+  --teal-400: #2dd4bf;
+  --teal-100: #ccfbf1;
+  --teal-50: #f0fdfa;
+  --orange: #ea580c;
+  --orange-hover: #c2410c;
+  --orange-light: #fff7ed;
+  --ok: #16a34a;
+  --ok-bg: #dcfce7;
+  --warn: #ca8a04;
+  --warn-bg: #fef9c3;
+  --err: #dc2626;
+  --err-bg: #fee2e2;
+  --blue: #2563eb;
+  --blue-bg: #eff6ff;
+  --amber: #d97706;
+  --sans: 'Plus Jakarta Sans', -apple-system, 'PingFang SC', 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, 'Cascadia Code', monospace;
+  --r: 6px;
+  --r-sm: 4px;
+  --r-lg: 10px;
+  --ease: cubic-bezier(.25,.1,.25,1);
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -39,9 +78,9 @@ onUnmounted(() => {
 }
 
 body {
-  font-family: system-ui, -apple-system, "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif;
-  background-color: #f5f7fa;
-  color: #1a1d26;
+  font-family: var(--sans);
+  background-color: var(--bg);
+  color: var(--ink-800);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-tap-highlight-color: transparent;
@@ -51,35 +90,35 @@ body {
 
 /* Card */
 .el-card {
-  border-radius: 10px !important;
-  border: 1px solid #e5e7eb !important;
+  border-radius: var(--r-lg) !important;
+  border: 1px solid var(--ink-200) !important;
 }
 
 /* Table */
 .el-table {
-  --el-table-border-color: #e5e7eb;
-  --el-table-header-bg-color: #f9fafb;
-  --el-table-row-hover-bg-color: #f5f7fa;
-  --el-table-bg-color: #ffffff;
-  --el-table-tr-bg-color: #ffffff;
-  --el-table-text-color: #1a1d26;
-  --el-table-header-text-color: #5c6477;
+  --el-table-border-color: var(--ink-200);
+  --el-table-header-bg-color: var(--bg-muted);
+  --el-table-row-hover-bg-color: var(--bg-hover);
+  --el-table-bg-color: var(--bg-card);
+  --el-table-tr-bg-color: var(--bg-card);
+  --el-table-text-color: var(--ink-800);
+  --el-table-header-text-color: var(--ink-400);
 }
 
 .el-table th.el-table__cell {
   font-weight: 600;
   font-size: 13px;
-  color: #5c6477;
+  color: var(--ink-400);
 }
 
 .el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell {
-  background: #f9fafb;
+  background: var(--bg-muted);
 }
 
 /* Button */
 .el-button--primary {
-  --el-button-bg-color: #2563eb;
-  --el-button-border-color: #2563eb;
+  --el-button-bg-color: var(--blue);
+  --el-button-border-color: var(--blue);
   --el-button-hover-bg-color: #1d4ed8;
   --el-button-hover-border-color: #1d4ed8;
   --el-button-active-bg-color: #1e40af;
@@ -87,193 +126,193 @@ body {
 }
 
 .el-button--success {
-  --el-button-bg-color: #059669;
-  --el-button-border-color: #059669;
-  --el-button-hover-bg-color: #047857;
-  --el-button-hover-border-color: #047857;
+  --el-button-bg-color: var(--ok);
+  --el-button-border-color: var(--ok);
+  --el-button-hover-bg-color: #15803d;
+  --el-button-hover-border-color: #15803d;
 }
 
 .el-button--danger {
-  --el-button-bg-color: #dc2626;
-  --el-button-border-color: #dc2626;
+  --el-button-bg-color: var(--err);
+  --el-button-border-color: var(--err);
   --el-button-hover-bg-color: #b91c1c;
   --el-button-hover-border-color: #b91c1c;
 }
 
 .el-button--warning {
-  --el-button-bg-color: #d97706;
-  --el-button-border-color: #d97706;
-  --el-button-hover-bg-color: #b45309;
-  --el-button-hover-border-color: #b45309;
+  --el-button-bg-color: var(--warn);
+  --el-button-border-color: var(--warn);
+  --el-button-hover-bg-color: #a16207;
+  --el-button-hover-border-color: #a16207;
 }
 
 /* Tag */
 .el-tag--info {
-  --el-tag-bg-color: #f1f5f9;
-  --el-tag-border-color: #e2e8f0;
-  --el-tag-text-color: #64748b;
+  --el-tag-bg-color: var(--ink-100);
+  --el-tag-border-color: var(--ink-200);
+  --el-tag-text-color: var(--ink-400);
 }
 
 .el-tag--success {
-  --el-tag-bg-color: #ecfdf5;
-  --el-tag-border-color: #a7f3d0;
-  --el-tag-text-color: #059669;
+  --el-tag-bg-color: var(--ok-bg);
+  --el-tag-border-color: #bbf7d0;
+  --el-tag-text-color: var(--ok);
 }
 
 .el-tag--warning {
-  --el-tag-bg-color: #fffbeb;
+  --el-tag-bg-color: var(--warn-bg);
   --el-tag-border-color: #fde68a;
-  --el-tag-text-color: #d97706;
+  --el-tag-text-color: var(--warn);
 }
 
 .el-tag--danger {
-  --el-tag-bg-color: #fef2f2;
+  --el-tag-bg-color: var(--err-bg);
   --el-tag-border-color: #fecaca;
-  --el-tag-text-color: #dc2626;
+  --el-tag-text-color: var(--err);
 }
 
 .el-tag--dark.el-tag--info {
-  --el-tag-bg-color: #64748b;
-  --el-tag-border-color: #64748b;
+  --el-tag-bg-color: var(--ink-400);
+  --el-tag-border-color: var(--ink-400);
   --el-tag-text-color: #ffffff;
 }
 
 .el-tag--dark.el-tag--success {
-  --el-tag-bg-color: #059669;
-  --el-tag-border-color: #059669;
+  --el-tag-bg-color: var(--ok);
+  --el-tag-border-color: var(--ok);
   --el-tag-text-color: #ffffff;
 }
 
 .el-tag--dark.el-tag--warning {
-  --el-tag-bg-color: #d97706;
-  --el-tag-border-color: #d97706;
+  --el-tag-bg-color: var(--warn);
+  --el-tag-border-color: var(--warn);
   --el-tag-text-color: #ffffff;
 }
 
 .el-tag--dark.el-tag--danger {
-  --el-tag-bg-color: #dc2626;
-  --el-tag-border-color: #dc2626;
+  --el-tag-bg-color: var(--err);
+  --el-tag-border-color: var(--err);
   --el-tag-text-color: #ffffff;
 }
 
 /* Progress */
 .el-progress-bar__outer {
-  background-color: #e5e7eb;
+  background-color: var(--ink-200);
 }
 
 /* Pagination */
 .el-pagination {
   --el-pagination-bg-color: transparent;
-  --el-pagination-text-color: #5c6477;
-  --el-pagination-hover-color: #2563eb;
+  --el-pagination-text-color: var(--ink-400);
+  --el-pagination-hover-color: var(--blue);
 }
 
 .el-pagination .el-pager li.is-active {
-  color: #2563eb;
+  color: var(--blue);
 }
 
 /* Input */
 .el-input__wrapper {
-  box-shadow: 0 0 0 1px #e5e7eb inset !important;
-  background: #ffffff !important;
+  box-shadow: 0 0 0 1px var(--ink-200) inset !important;
+  background: var(--bg-card) !important;
 }
 
 .el-input__wrapper:hover {
-  box-shadow: 0 0 0 1px #d1d5db inset !important;
+  box-shadow: 0 0 0 1px var(--ink-300) inset !important;
 }
 
 .el-input__wrapper.is-focus {
-  box-shadow: 0 0 0 1px #2563eb inset, 0 0 0 3px rgba(37, 99, 235, 0.1) inset !important;
+  box-shadow: 0 0 0 1px var(--blue) inset, 0 0 0 3px rgba(37, 99, 235, 0.1) inset !important;
 }
 
 .el-input__inner {
-  color: #1a1d26 !important;
+  color: var(--ink-800) !important;
 }
 
 .el-input__inner::placeholder {
-  color: #9ba3af !important;
+  color: var(--ink-400) !important;
 }
 
 /* Select */
 .el-select .el-input__wrapper {
-  background: #ffffff !important;
+  background: var(--bg-card) !important;
 }
 
 /* Select dropdown */
 .el-select-dropdown {
-  border: 1px solid #e5e7eb !important;
+  border: 1px solid var(--ink-200) !important;
 }
 
 .el-select-dropdown__item.selected {
-  color: #2563eb !important;
+  color: var(--blue) !important;
   font-weight: 600;
 }
 
 .el-select-dropdown__item:hover {
-  background-color: #f5f7fa !important;
+  background-color: var(--bg-hover) !important;
 }
 
 /* Dialog */
 .el-dialog {
-  border-radius: 10px !important;
+  border-radius: var(--r-lg) !important;
 }
 
 .el-dialog__header {
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--ink-200);
   padding: 16px 20px !important;
 }
 
 .el-dialog__title {
-  color: #1a1d26 !important;
+  color: var(--ink-900) !important;
   font-weight: 600;
 }
 
 .el-dialog__body {
-  color: #5c6477;
+  color: var(--ink-600);
 }
 
 .el-dialog__footer {
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--ink-200);
 }
 
 /* Drawer */
 .el-drawer__header {
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--ink-200);
   margin-bottom: 0 !important;
   padding: 16px 20px !important;
 }
 
 /* Form */
 .el-form-item__label {
-  color: #5c6477 !important;
+  color: var(--ink-600) !important;
 }
 
 /* Tabs */
 .el-tabs__active-bar {
-  background-color: #2563eb;
+  background-color: var(--blue);
 }
 
 .el-tabs__item.is-active {
-  color: #2563eb;
+  color: var(--blue);
 }
 
 .el-tabs__item:hover {
-  color: #2563eb;
+  color: var(--blue);
 }
 
 /* Dropdown */
 .el-dropdown-menu {
-  border: 1px solid #e5e7eb !important;
+  border: 1px solid var(--ink-200) !important;
 }
 
 .el-dropdown-menu__item:hover {
-  background-color: #f5f7fa !important;
-  color: #2563eb !important;
+  background-color: var(--bg-hover) !important;
+  color: var(--blue) !important;
 }
 
 /* MessageBox */
 .el-message-box {
-  border-radius: 10px;
+  border-radius: var(--r-lg);
 }
 
 /* Loading */
@@ -283,17 +322,17 @@ body {
 
 /* Empty */
 .el-empty__description p {
-  color: #9ba3af !important;
+  color: var(--ink-400) !important;
 }
 
 /* Descriptions */
 .el-descriptions__label {
-  color: #5c6477 !important;
+  color: var(--ink-600) !important;
 }
 
 /* Collapse */
 .el-collapse-item__header {
-  color: #1a1d26;
+  color: var(--ink-900);
 }
 
 /* Scrollbar */
@@ -303,16 +342,16 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #f5f7fa;
+  background: var(--bg-muted);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #d1d5db;
+  background: var(--ink-300);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #9ba3af;
+  background: var(--ink-400);
 }
 
 /* ===== 白色遮罩层彻底修复（3层防护） ===== */
@@ -353,15 +392,24 @@ body > div:empty:not([data-v-app]) {
 
 /* ===== Vant 主题变量（移动端） ===== */
 :root {
-  --van-primary-color: #2563eb;
-  --van-success-color: #059669;
-  --van-warning-color: #d97706;
-  --van-danger-color: #dc2626;
-  --van-text-color: #1a1d26;
-  --van-text-color-2: #5c6477;
-  --van-text-color-3: #9ba3af;
-  --van-border-color: #e5e7eb;
-  --van-background: #f5f7fa;
-  --van-background-2: #ffffff;
+  --van-primary-color: var(--blue);
+  --van-success-color: var(--ok);
+  --van-warning-color: var(--warn);
+  --van-danger-color: var(--err);
+  --van-text-color: var(--ink-800);
+  --van-text-color-2: var(--ink-600);
+  --van-text-color-3: var(--ink-400);
+  --van-border-color: var(--ink-200);
+  --van-background: var(--bg);
+  --van-background-2: var(--bg-card);
+}
+
+/* ===== 移动端底部导航栏固定 ===== */
+.van-tabbar--fixed {
+  position: fixed !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  z-index: 100 !important;
 }
 </style>

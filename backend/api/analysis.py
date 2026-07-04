@@ -6,7 +6,7 @@ import json
 import uuid
 import time
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from collections import defaultdict
 
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
@@ -64,6 +64,7 @@ class AnalysisStartRequest(BaseModel):
     time_range_end: Optional[str] = None
     report_a_id: Optional[str] = None
     report_b_id: Optional[str] = None
+    project_ids: Optional[List[int]] = None  # 全项目概览：选中的项目列表
     filters: Optional[dict] = None
 
 
@@ -133,6 +134,7 @@ async def _run_analysis_graph(analysis_id: str, request_data: dict, user_id: int
         "time_range_end": request_data.get("time_range_end"),
         "report_a_id": request_data.get("report_a_id"),
         "report_b_id": request_data.get("report_b_id"),
+        "project_ids": request_data.get("project_ids"),
         "filters": request_data.get("filters"),
         "reports_data": [],
         "projects_info": [],
@@ -233,8 +235,8 @@ async def start_analysis(
             raise HTTPException(status_code=400, detail="跨时段对比需要选择一个项目")
 
     elif mode == "all_projects":
-        if not request.time_range_start or not request.time_range_end:
-            raise HTTPException(status_code=400, detail="全项目概览需要指定时间范围")
+        if not request.project_ids or len(request.project_ids) < 2:
+            raise HTTPException(status_code=400, detail="全项目概览需要选择至少 2 个项目")
 
     # 速率限制：60秒内同一用户不能重复触发同类型分析
     rate_key = (current_user.id, mode)
@@ -515,7 +517,7 @@ async def get_history(
                 pa = db.query(Project).filter(Project.id == r.project_a_id).first()
                 summary = f"{pa.name if pa else '?'} 跨时段分析"
             elif r.mode == "all_projects":
-                summary = f"全项目概览 ({r.time_range_start} ~ {r.time_range_end})"
+                summary = "全项目概览"
 
             items.append({
                 "analysis_id": r.analysis_id,

@@ -1,0 +1,281 @@
+/*
+ * design-upgrade.css
+ * 原型 all-pages.html 完整设计系统 → Element Plus / Vue 组件覆盖
+ * 只包含样式规则，不包含任何逻辑
+ */
+
+/* ===== 动画 ===== */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes pgIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ===== 页面标题 ===== */
+.page-header {
+  margin-bottom: 20px !important;
+}
+.page-title {
+  font-size: 22px !important;
+  font-weight: 800 !important;
+  color: var(--ink-900) !important;
+  letter-spacing: -0.4px !important;
+}
+.page-desc {
+  font-size: 13px !important;
+  color: var(--ink-400) !important;
+  margin-top: 3px !important;
+}
+
+/* ===== KPI / Stat 卡片 ===== */
+.stat-grid {
+  gap: 12px !important;
+  margin-bottom: 20px !important;
+}
+.stat-card {
+  background: var(--bg-card) !important;
+  border: 1px solid var(--ink-100) !important;
+  border-radius: var(--r-lg) !important;
+  padding: 18px 20px !important;
+  box-shadow: none !important;
+  transition: all 0.15s var(--ease) !important;
+  animation: fadeInUp 0.3s var(--ease) both !important;
+}
+.stat-card:hover {
+  border-color: var(--ink-200) !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04) !important;
+  transform: none !important;
+}
+.stat-card::before {
+  border-radius: var(--r-lg) var(--r-lg) 0 0 !important;
+}
+.stat-label {
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: var(--ink-400) !important;
+  margin-bottom: 6px !important;
+}
+.stat-value {
+  font-family: var(--mono) !important;
+  font-size: 32px !important;
+  font-weight: 700 !important;
+  color: var(--ink-900) !important;
+  line-height: 1 !important;
+  letter-spacing: -1.5px !important;
+}
+.stat-unit {
+  font-family: var(--mono) !important;
+  font-size: 16px !important;
+  font-weight: 500 !important;
+  color: var(--ink-400) !important;
+}
+.stat-tags {
+  gap: 6px !important;
+}
+.stat-tag {
+  font-size: 11px !important;
+  font-family: var(--mono) !important;
+  font-weight: 600 !important;
+  padding: 2px 7px !important;
+  border-radius: 3px !important;
+}
+
+/* ===== 卡片（dash-card / el-card） ===== */
+.dash-card,
+.el-card {
+  background: var(--bg-card) !important;
+  border: 1px solid var(--ink-100) !important;
+  border-radius: var(--r-lg) !important;
+  box-shadow: none !important;
+  overflow: hidden !important;
+  animation: fadeInUp 0.3s var(--ease) 0.05s both !important;
+}
+.dash-card-header {
+  padding: 14px 20px !important;
+  border-bottom: 1px solid var(--ink-100) !important;
+}
+.dash-card-title {
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  color: var(--ink-900) !important;
+}
+.dash-card-sub {
+  font-size: 12px !important;
+  color: var(--ink-400) !important;
+}
+.dash-card-actions {
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+}
+
+/* ===== 图表网格 ===== */
+.charts-grid {
+  gap: 14px !important;
+}
+
+/* ===== 表格（el-table） ===== */
+.el-table {
+  font-family: var(--sans) !important;
+}
+.el-table th.el-table__cell {
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  color: var(--ink-400) !important;
+  letter-spacing: 0.3px !important;
+  background: var(--bg-muted) !important;
+}
+.el-table td.el-table__cell {
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  color: var(--ink-600) !important;
+}
+.el-table .el-table__row:hover > td {
+  background: var(--bg) !important;
+}
+
+/* ===== 自定义表格（module-score-table 等） ===== */
+.module-score-table th {
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  color: var(--ink-400) !important;
+  background: var(--bg-muted) !important;
+}
+.module-score-table td {
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  color: var(--ink-600) !important;
+}
+
+/* ===== Score pills ===== */
+.cell-score,
+.cell-good,
+.cell-ok,
+.cell-bad {
+  font-family: var(--mono) !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  border-radius: 3px !important;
+  padding: 2px 6px !important;
+}
+.cell-good,
+.cell-ok {
+  background: var(--ok-bg) !important;
+  color: var(--ok) !important;
+}
+.cell-bad {
+  background: var(--err-bg) !important;
+  color: var(--err) !important;
+}
+
+/* ===== 状态标签（el-tag） ===== */
+.el-tag {
+  border-radius: 12px !important;
+  font-weight: 600 !important;
+}
+.el-tag--small {
+  font-size: 11px !important;
+}
+
+/* ===== 按钮 ===== */
+.el-button {
+  font-family: var(--sans) !important;
+  font-weight: 600 !important;
+  border-radius: var(--r) !important;
+  transition: all 0.12s var(--ease) !important;
+}
+.el-button--small {
+  font-size: 12px !important;
+}
+
+/* ===== 筛选栏 ===== */
+.filter-bar-card {
+  background: var(--bg-card) !important;
+  border: 1px solid var(--ink-100) !important;
+  border-radius: var(--r-lg) !important;
+  box-shadow: none !important;
+}
+.filter-fields {
+  gap: 8px !important;
+}
+
+/* ===== Radio 分段控件（el-radio-group） ===== */
+.el-radio-group {
+  gap: 2px !important;
+}
+.el-radio-button__inner {
+  font-family: var(--sans) !important;
+  font-weight: 600 !important;
+  font-size: 13px !important;
+  border-radius: var(--r-sm) !important;
+  transition: all 0.12s !important;
+}
+
+/* ===== 管道/步骤条 ===== */
+.pipe-dot {
+  font-family: var(--mono) !important;
+}
+
+/* ===== 内容区域滚动条 ===== */
+.el-main {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ink-200) transparent;
+}
+.el-main::-webkit-scrollbar {
+  width: 6px;
+}
+.el-main::-webkit-scrollbar-thumb {
+  background: var(--ink-200);
+  border-radius: 3px;
+}
+
+/* ===== 统计指标（el-statistic） ===== */
+.el-statistic__head {
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: var(--ink-400) !important;
+}
+.el-statistic__content {
+  font-family: var(--mono) !important;
+  font-weight: 700 !important;
+}
+
+/* ===== Settings 页面标签页 ===== */
+.styled-tabs :deep(.el-tabs__item) {
+  font-size: 15px !important;
+  font-weight: 500 !important;
+}
+
+/* ===== 全局数字 ===== */
+[number],
+.mono,
+.font-mono {
+  font-family: var(--mono) !important;
+}
+
+/* ===== 模型状态点 ===== */
+.model-dot {
+  width: 8px !important;
+  height: 8px !important;
+  border-radius: 50% !important;
+  display: inline-block !important;
+  margin-right: 4px !important;
+}
+
+/* ===== 背景覆盖 ===== */
+.el-main {
+  background: var(--bg) !important;
+}
+
+/* ===== 响应式 ===== */
+@media (max-width: 1200px) {
+  .stat-grid {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+  .charts-grid {
+    grid-template-columns: 1fr !important;
+  }
+}

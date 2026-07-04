@@ -20,6 +20,7 @@ deploy_*.py
 
 # 检查照片（含现场照片、水印信息）
 backend/data/photos/
+backend/data/photos_import/
 **/photos/
 
 # 生成的报告文件
@@ -28,6 +29,7 @@ backend/data/reports/
 
 # 分析数据缓存
 backend/data/analysis/
+backend/data/backups/
 
 # 测试生成的图片
 test_*.png

@@ -2,6 +2,12 @@
 整改 API 测试
 覆盖：整改列表获取、状态筛选、权限控制
 """
+from io import BytesIO
+
+from openpyxl import load_workbook
+from PIL import Image
+
+from models.models import InspectionRecord, InspectionTask, Issue, Photo, Rectification
 
 
 class TestRectificationList:
@@ -70,3 +76,60 @@ class TestRectificationByRole:
         """检查员应能查看整改列表"""
         resp = client.get("/api/v1/rectifications/all", headers=inspector_headers)
         assert resp.status_code == 200
+
+
+class TestRectificationExport:
+    """整改导出测试"""
+
+    def test_export_allows_shared_issue_photo_in_multiple_rows(
+        self, client, admin_headers, db_session, test_project, tmp_path
+    ):
+        """同一问题对应多轮整改记录时，共用照片仍应能生成有效 Excel。"""
+        task = InspectionTask(
+            task_id="T-EXPORT-SHARED-PHOTO",
+            project_id=test_project.id,
+            check_date="2026-05-27",
+        )
+        record = InspectionRecord(
+            record_id="REC-EXPORT-SHARED-PHOTO",
+            task_id=task.task_id,
+            project_id=test_project.id,
+            module_name="客户服务",
+            check_date="2026-05-27",
+        )
+        issue = Issue(
+            issue_id="ISS-EXPORT-SHARED-PHOTO",
+            record_id=record.record_id,
+            module_name="客户服务",
+            item_id="1.1",
+            item_name="前台环境",
+            description="台面杂乱",
+        )
+        photo_path = tmp_path / "shared.jpg"
+        Image.new("RGB", (32, 24), (220, 30, 30)).save(photo_path, "JPEG")
+        photo = Photo(
+            photo_id="PHO-EXPORT-SHARED-PHOTO",
+            issue_id=issue.issue_id,
+            file_path=str(photo_path),
+            file_name=photo_path.name,
+            photo_type="问题照片",
+        )
+        rectifications = [
+            Rectification(
+                rectification_id=f"RECT-EXPORT-SHARED-{index}",
+                issue_id=issue.issue_id,
+                record_id=record.record_id,
+                task_id=task.task_id,
+            )
+            for index in (1, 2)
+        ]
+        db_session.add_all([task, record, issue, photo, *rectifications])
+        db_session.commit()
+
+        response = client.get("/api/v1/rectifications/export/excel", headers=admin_headers)
+
+        assert response.status_code == 200
+        workbook = load_workbook(BytesIO(response.content))
+        worksheet = workbook.active
+        assert worksheet.max_row == 3
+        assert len(worksheet._images) == 2

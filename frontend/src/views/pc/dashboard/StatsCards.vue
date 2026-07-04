@@ -1,221 +1,186 @@
 <template>
-  <div class="stat-grid">
-    <div class="stat-card" style="--accent: #2563eb; --accent-light: #EFF6FF; --accent-grad: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%)" @click="$emit('open-task')">
-      <div class="stat-icon-box">
-        <el-icon :size="22"><List /></el-icon>
+  <div class="kpi-row cols-5">
+    <div class="kpi clickable" :class="{ active: activeKpi === 'tasks' }" @click="$emit('open-task'); activeKpi = 'tasks'">
+      <div class="kpi-lbl">检查任务</div>
+      <div class="kpi-num">{{ summary.total_tasks || 0 }}</div>
+      <div class="kpi-tags">
+        <span class="kt kt-muted">待处理 {{ summary.pending_tasks || 0 }}</span>
+        <span class="kt kt-blue">进行中 {{ summary.in_progress_tasks || 0 }}</span>
       </div>
-      <div class="stat-body">
-        <span class="stat-label">检查任务</span>
-        <span class="stat-value">{{ summary.total_tasks || 0 }}</span>
-        <div class="stat-tags">
-          <span class="stat-tag tag-gray">待处理 {{ summary.pending_tasks || 0 }}</span>
-          <span class="stat-tag tag-blue">进行中 {{ summary.in_progress_tasks || 0 }}</span>
-        </div>
-      </div>
-      <el-icon class="stat-arrow"><ArrowRight /></el-icon>
+      <div class="kpi-arrow"><svg viewBox="0 0 16 16"><path d="M6 3l5 5-5 5" /></svg></div>
     </div>
-
-    <div class="stat-card" style="--accent: #059669; --accent-light: #ECFDF5; --accent-grad: linear-gradient(135deg, #059669 0%, #10b981 100%)" @click="$emit('open-coverage')">
-      <div class="stat-icon-box">
-        <el-icon :size="22"><PieChart /></el-icon>
+    <div class="kpi clickable" :class="{ active: activeKpi === 'coverage' }" @click="$emit('open-coverage'); activeKpi = 'coverage'">
+      <div class="kpi-lbl">本月覆盖率</div>
+      <div class="kpi-num">{{ summary.coverage_rate || 0 }}<span class="kpi-unit">%</span></div>
+      <div class="kpi-tags">
+        <span class="kt kt-muted">{{ summary.monthly_checked_projects || 0 }} / {{ summary.total_projects || 0 }} 项目</span>
       </div>
-      <div class="stat-body">
-        <span class="stat-label">本月覆盖率</span>
-        <span class="stat-value">{{ summary.coverage_rate || 0 }}<span class="stat-unit">%</span></span>
-        <div class="stat-tags">
-          <span class="stat-tag">{{ summary.monthly_checked_projects || 0 }} / {{ summary.total_projects || 0 }} 项目</span>
-        </div>
-      </div>
-      <el-icon class="stat-arrow"><ArrowRight /></el-icon>
+      <div class="kpi-arrow"><svg viewBox="0 0 16 16"><path d="M6 3l5 5-5 5" /></svg></div>
     </div>
-
-    <div class="stat-card" style="--accent: #dc2626; --accent-light: #FEF2F2; --accent-grad: linear-gradient(135deg, #dc2626 0%, #ef4444 100%)" @click="$emit('open-issue')">
-      <div class="stat-icon-box">
-        <el-icon :size="22"><WarningFilled /></el-icon>
+    <div class="kpi clickable" :class="{ active: activeKpi === 'issues' }" @click="$emit('open-issue'); activeKpi = 'issues'">
+      <div class="kpi-lbl">问题总数</div>
+      <div class="kpi-num">{{ summary.total_issues || 0 }}</div>
+      <div class="kpi-tags">
+        <span class="kt kt-err">严重 {{ summary.serious_issues || 0 }}</span>
+        <span class="kt kt-warn">一般 {{ summary.general_issues || 0 }}</span>
       </div>
-      <div class="stat-body">
-        <span class="stat-label">问题总数</span>
-        <span class="stat-value">{{ summary.total_issues || 0 }}</span>
-        <div class="stat-tags">
-          <span class="stat-tag tag-red">严重 {{ summary.serious_issues || 0 }}</span>
-          <span class="stat-tag tag-orange">一般 {{ summary.general_issues || 0 }}</span>
-        </div>
-      </div>
-      <el-icon class="stat-arrow"><ArrowRight /></el-icon>
+      <div class="kpi-arrow"><svg viewBox="0 0 16 16"><path d="M6 3l5 5-5 5" /></svg></div>
     </div>
-
-    <div class="stat-card" style="--accent: #f59e0b; --accent-light: #FFFBEB; --accent-grad: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)" @click="$emit('open-rect')">
-      <div class="stat-icon-box">
-        <el-icon :size="22"><Clock /></el-icon>
+    <div class="kpi clickable" :class="{ active: activeKpi === 'pending' }" @click="$emit('open-rect'); activeKpi = 'pending'">
+      <div class="kpi-lbl">待整改</div>
+      <div class="kpi-num">{{ summary.pending_rectifications || 0 }}</div>
+      <div class="kpi-tags">
+        <span class="kt kt-warn">已提交 {{ summary.submitted_rectifications || 0 }}</span>
       </div>
-      <div class="stat-body">
-        <span class="stat-label">待整改</span>
-        <span class="stat-value">{{ summary.pending_rectifications || 0 }}</span>
-        <div class="stat-tags">
-          <span class="stat-tag">已提交 {{ summary.submitted_rectifications || 0 }}</span>
-        </div>
-      </div>
-      <el-icon class="stat-arrow"><ArrowRight /></el-icon>
+      <div class="kpi-arrow"><svg viewBox="0 0 16 16"><path d="M6 3l5 5-5 5" /></svg></div>
     </div>
-
-    <div class="stat-card" style="--accent: #059669; --accent-light: #ECFDF5; --accent-grad: linear-gradient(135deg, #059669 0%, #10b981 100%)" @click="$emit('open-rect')">
-      <div class="stat-icon-box">
-        <el-icon :size="22"><CircleCheck /></el-icon>
+    <div class="kpi clickable" :class="{ active: activeKpi === 'rate' }" @click="$emit('open-rect'); activeKpi = 'rate'">
+      <div class="kpi-lbl">整改完成率</div>
+      <div class="kpi-num">{{ summary.rectification_rate || 0 }}<span class="kpi-unit">%</span></div>
+      <div class="kpi-tags">
+        <span class="kt kt-ok">已通过 {{ summary.approved_rectifications || 0 }}</span>
       </div>
-      <div class="stat-body">
-        <span class="stat-label">已通过整改</span>
-        <span class="stat-value">{{ summary.approved_rectifications || 0 }}</span>
-        <div class="stat-tags">
-          <span class="stat-tag tag-green">完成率 {{ summary.rectification_rate || 0 }}%</span>
-        </div>
-      </div>
-      <el-icon class="stat-arrow"><ArrowRight /></el-icon>
+      <div class="kpi-arrow"><svg viewBox="0 0 16 16"><path d="M6 3l5 5-5 5" /></svg></div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { List, ArrowRight, PieChart, WarningFilled, Clock, CircleCheck } from '@element-plus/icons-vue'
+import { ref } from 'vue'
 
 defineProps({
   summary: { type: Object, default: () => ({}) }
 })
 
 defineEmits(['open-task', 'open-coverage', 'open-issue', 'open-rect'])
+
+const activeKpi = ref('')
 </script>
 
 <style scoped>
-/* ==================== 统计卡片 ==================== */
-.stat-grid {
+.kpi-row {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 14px;
+  gap: 12px;
   margin-bottom: 20px;
 }
 
-.stat-card {
-  background: #fff;
-  border-radius: 12px;
-  padding: 20px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
+.kpi-row.cols-5 {
+  grid-template-columns: repeat(5, 1fr);
+}
+
+.kpi {
+  background: var(--bg-card);
+  border: 1px solid var(--ink-100);
+  border-radius: var(--r-lg);
+  padding: 18px 20px;
+  cursor: default;
+  transition: all 0.15s var(--ease);
+  animation: kpiIn 0.3s var(--ease) both;
+}
+
+.kpi:nth-child(2) { animation-delay: 30ms; }
+.kpi:nth-child(3) { animation-delay: 60ms; }
+.kpi:nth-child(4) { animation-delay: 90ms; }
+.kpi:nth-child(5) { animation-delay: 120ms; }
+
+.kpi:hover {
+  border-color: var(--ink-200);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.kpi.clickable {
   cursor: pointer;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
   position: relative;
-  overflow: hidden;
-  animation: fadeInUp 0.4s ease-out both;
 }
 
-.stat-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: var(--accent-grad, var(--accent));
-  border-radius: 12px 12px 0 0;
+.kpi.clickable:hover {
+  border-color: var(--blue);
+  box-shadow: 0 2px 12px rgba(37, 99, 235, 0.1);
 }
 
-.stat-card:nth-child(1) { animation-delay: 0s; }
-.stat-card:nth-child(2) { animation-delay: 0.05s; }
-.stat-card:nth-child(3) { animation-delay: 0.1s; }
-.stat-card:nth-child(4) { animation-delay: 0.15s; }
-.stat-card:nth-child(5) { animation-delay: 0.2s; }
-
-.stat-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.08);
+.kpi.clickable.active {
+  border-color: var(--blue);
+  background: var(--blue-bg);
 }
 
-.stat-icon-box {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  background: var(--accent-light);
-  color: var(--accent);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  transition: transform 0.25s;
-}
-
-.stat-card:hover .stat-icon-box {
-  transform: scale(1.08);
-}
-
-.stat-body {
-  flex: 1;
-  min-width: 0;
-}
-
-.stat-label {
-  display: block;
+.kpi-lbl {
   font-size: 13px;
-  color: #9ba3af;
-  margin-bottom: 4px;
+  font-weight: 600;
+  color: var(--ink-400);
+  margin-bottom: 6px;
 }
 
-.stat-value {
-  display: block;
-  font-size: 28px;
+.kpi-num {
+  font-family: var(--mono);
+  font-size: 32px;
   font-weight: 700;
-  color: #1a1d26;
-  line-height: 1.2;
+  color: var(--ink-900);
+  line-height: 1;
+  margin-bottom: 6px;
+  letter-spacing: -1.5px;
 }
 
-.stat-unit {
-  font-size: 14px;
-  font-weight: 400;
-  color: #9ba3af;
-}
-
-.stat-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 6px;
-}
-
-.stat-tag {
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 10px;
-  background: #F1F5F9;
-  color: #64748B;
-}
-
-.tag-blue { background: #EFF6FF; color: #2563eb; }
-.tag-red { background: #FEF2F2; color: #dc2626; }
-.tag-orange { background: #FFF7ED; color: #ea580c; }
-.tag-green { background: #ECFDF5; color: #059669; }
-.tag-gray { background: #F8FAFC; color: #64748B; }
-
-.stat-arrow {
-  color: #CBD5E1;
-  flex-shrink: 0;
-  transition: transform 0.2s, color 0.2s;
+.kpi-unit {
   font-size: 16px;
+  font-weight: 500;
+  color: var(--ink-400);
+  letter-spacing: 0;
 }
 
-.stat-card:hover .stat-arrow {
-  transform: translateX(3px);
-  color: var(--accent);
+.kpi-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
-@keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(10px); }
+.kt {
+  font-size: 11px;
+  font-family: var(--mono);
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 3px;
+}
+
+.kt-ok { background: var(--ok-bg); color: var(--ok); }
+.kt-warn { background: var(--warn-bg); color: var(--warn); }
+.kt-err { background: var(--err-bg); color: var(--err); }
+.kt-teal { background: var(--teal-50); color: var(--teal-700); }
+.kt-muted { background: var(--bg-muted); color: var(--ink-600); }
+.kt-blue { background: var(--blue-bg); color: var(--blue); }
+
+.kpi-arrow {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--ink-300);
+  opacity: 0;
+  transition: all 0.15s;
+}
+
+.kpi.clickable:hover .kpi-arrow {
+  opacity: 1;
+  color: var(--blue);
+}
+
+.kpi-arrow svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+}
+
+@keyframes kpiIn {
+  from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
 @media (max-width: 1200px) {
-  .stat-grid { grid-template-columns: repeat(3, 1fr); }
+  .kpi-row.cols-5 { grid-template-columns: repeat(3, 1fr); }
 }
 
 @media (max-width: 900px) {
-  .stat-grid { grid-template-columns: repeat(2, 1fr); }
+  .kpi-row.cols-5 { grid-template-columns: repeat(2, 1fr); }
 }
 </style>

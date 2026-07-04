@@ -1,14 +1,21 @@
 import { defineStore } from 'pinia'
 import { login as loginApi, getMe } from '../api/auth'
 import router from '../router'
+import {
+  clearAuthSession,
+  getAuthToken,
+  getStoredActiveProjectId,
+  getStoredUser,
+  saveAuthenticatedSession,
+  setActiveProject as persistActiveProject,
+  setStoredUser
+} from '../utils/authStorage'
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
-    token: localStorage.getItem('token') || '',
-    user: JSON.parse(localStorage.getItem('user') || '{}'),
-    activeProjectId: localStorage.getItem('activeProjectId')
-      ? parseInt(localStorage.getItem('activeProjectId'))
-      : null
+    token: getAuthToken(),
+    user: getStoredUser(),
+    activeProjectId: getStoredActiveProjectId()
   }),
 
   getters: {
@@ -33,26 +40,25 @@ export const useAuthStore = defineStore('auth', {
 
   actions: {
     _clearAllState() {
-      localStorage.clear()
+      clearAuthSession()
       this.token = ''
       this.user = {}
       this.activeProjectId = null
     },
 
-    async login(account, password) {
-      this._clearAllState()
-      const res = await loginApi({ account, password })
+    applyAuthenticatedSession(res, persistent = false) {
+      saveAuthenticatedSession(res, persistent)
       this.token = res.access_token
       this.user = res.user
-      localStorage.setItem('token', res.access_token)
-      localStorage.setItem('user', JSON.stringify(res.user))
+      this.activeProjectId = res.user.projects && res.user.projects.length > 0
+        ? res.user.projects[0].id
+        : null
+    },
 
-      // 自动设置活跃项目
-      if (res.user.projects && res.user.projects.length > 0) {
-        this.activeProjectId = res.user.projects[0].id
-        localStorage.setItem('activeProjectId', String(this.activeProjectId))
-      }
-
+    async login(account, password, persistent = false) {
+      this._clearAllState()
+      const res = await loginApi({ account, password })
+      this.applyAuthenticatedSession(res, persistent)
       return res
     },
 
@@ -61,12 +67,12 @@ export const useAuthStore = defineStore('auth', {
       try {
         const res = await getMe()
         this.user = res
-        localStorage.setItem('user', JSON.stringify(res))
+        setStoredUser(res)
 
         // 如果还没有活跃项目，设置第一个
         if (!this.activeProjectId && res.projects && res.projects.length > 0) {
           this.activeProjectId = res.projects[0].id
-          localStorage.setItem('activeProjectId', String(this.activeProjectId))
+          persistActiveProject(this.activeProjectId)
         }
       } catch (e) {
         this.logout()
@@ -75,7 +81,7 @@ export const useAuthStore = defineStore('auth', {
 
     setActiveProject(projectId) {
       this.activeProjectId = projectId
-      localStorage.setItem('activeProjectId', String(projectId))
+      persistActiveProject(projectId)
       // 刷新当前页面以加载新项目的数据
       router.go(0)
     },

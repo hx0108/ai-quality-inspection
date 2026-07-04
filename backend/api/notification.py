@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from database import get_db
+from database import get_db, SessionLocal
 from models.models import User, Notification
 from api.deps import get_current_user
 from core.logger import get_logger
@@ -55,7 +55,6 @@ class NotificationCreateRequest(BaseModel):
 
 def _generate_notification_id() -> str:
     """生成通知ID"""
-    from models.models import Task
     today = datetime.now().strftime("%Y%m%d")
     import random
     suffix = ''.join([str(random.randint(0, 9)) for _ in range(6)])

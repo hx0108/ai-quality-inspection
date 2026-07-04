@@ -241,14 +241,7 @@
         title="结束日期" />
     </van-popup>
 
-    <van-action-sheet v-model:show="showUser" title="个人信息">
-      <div class="user-info">
-        <van-cell title="用户名" :value="user.username" />
-        <van-cell title="姓名" :value="user.real_name" />
-        <van-cell title="角色" :value="getRoleText(user.role)" />
-        <van-button block type="danger" @click="onLogout" style="margin-top: 20px">退出登录</van-button>
-      </div>
-    </van-action-sheet>
+    <MobileUserSheet v-model:show="showUser" />
 
   </div>
 </template>
@@ -257,6 +250,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { showToast, showSuccessToast } from 'vant'
 import { useAuthStore } from '../../stores/auth'
+import MobileUserSheet from '../../components/MobileUserSheet.vue'
 import { getProjectsWithReports, startAnalysis, getAnalysisProgress, getAnalysisResult, downloadAnalysisFile, getAnalysisHistory } from '../../api/analysis'
 import { getReportList } from '../../api/report'
 
@@ -290,8 +284,6 @@ const showStartPicker = ref(false)
 const showEndPicker = ref(false)
 const startDateArr = ref(['2026', '01', '01'])
 const endDateArr = ref(['2026', '12', '31'])
-
-const user = computed(() => authStore.user || {})
 
 const pickerColumns = computed(() => {
   const list = mode.value === 'cross_time' ? projectReports.value : allReports.value
@@ -537,13 +529,6 @@ const viewHistoryItem = async (h) => {
     showToast('加载分析结果失败')
   }
 }
-
-const getRoleText = (role) => {
-  const map = { admin: '管理员', inspector: '检查员', site_supervisor: '阵地督导', field_supervisor: '驻场经理', project_staff: '项目人员' }
-  return map[role] || role
-}
-
-const onLogout = () => { authStore.logout() }
 
 watch(mode, (val) => {
   if (val === 'history') loadHistory()
@@ -800,5 +785,4 @@ onMounted(fetchData)
 }
 .history-footer { margin-top: 6px; }
 
-.user-info { padding: 16px; }
 </style>

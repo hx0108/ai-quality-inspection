@@ -307,6 +307,8 @@ class Rectification(Base):
     review_note = Column(Text, nullable=True)  # 审核意见
     reviewer_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # 审核人
     round_number = Column(Integer, default=1)  # 整改轮次（1=首次, 2=二次整改...）
+    deadline = Column(String(10), nullable=True)  # 整改截止日期 "YYYY-MM-DD" = check_date + 30天
+    reminder_sent = Column(String(20), nullable=True)  # 提醒状态: NULL / "expiring" / "expired"
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

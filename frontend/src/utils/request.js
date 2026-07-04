@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { showToast } from 'vant'
+import { clearAuthSession, getAuthToken } from './authStorage'
 
 const request = axios.create({
   baseURL: '/api/v1',
@@ -9,7 +10,7 @@ const request = axios.create({
 // 请求拦截器
 request.interceptors.request.use(
   config => {
-    const token = localStorage.getItem('token')
+    const token = getAuthToken()
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
@@ -31,9 +32,8 @@ request.interceptors.response.use(
       const detail = data?.detail || '请求失败'
 
       if (status === 401) {
-        const hasToken = !!localStorage.getItem('token')
-        localStorage.removeItem('token')
-        localStorage.removeItem('user')
+        const hasToken = !!getAuthToken()
+        clearAuthSession()
         // Only redirect to login if the user had a token — no-token 401 means
         // unauthenticated request on a public page (login/register), skip redirect
         if (hasToken) {

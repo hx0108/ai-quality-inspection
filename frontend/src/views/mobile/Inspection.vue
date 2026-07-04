@@ -296,6 +296,7 @@ import { forceOverlayCleanup, scheduleCleanup } from '../../utils/overlayGuard'
 import OfflineBanner from '../../components/OfflineBanner.vue'
 import WatermarkCamera from '../../components/WatermarkCamera.vue'
 import { useAuthStore } from '../../stores/auth'
+import { getAuthToken } from '../../utils/authStorage'
 
 const router = useRouter()
 const route = useRoute()
@@ -397,7 +398,7 @@ const getItemClass = (item) => ({
 // 从后端加载照片并转为 blob URL
 const loadPhotoBlob = async (photoId) => {
   try {
-    const token = localStorage.getItem('token')
+    const token = getAuthToken()
     const resp = await fetch(`/api/v1/records/photos/${photoId}`, {
       headers: { Authorization: `Bearer ${token}` }
     })

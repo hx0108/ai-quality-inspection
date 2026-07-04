@@ -163,12 +163,17 @@ def _check_and_trigger_report(task_id: str):
             if not task:
                 return
 
-            # 如果任务卡在 reporting 状态但没有报告，重置为 completed
+            # 如果任务卡在 reporting 状态但没有报告，根据实际进度重置
             if task.status == "reporting":
                 existing_report = db.query(ReportModel).filter(ReportModel.task_id == task_id).first()
                 if not existing_report:
-                    logger.warning(f"_check_and_trigger_report: 任务 {task_id} 卡在 reporting 状态，重置为 completed")
-                    task.status = "completed"
+                    from api.tasks import MODULE_NAMES
+                    done_count = db.query(InspectionRecord).filter(
+                        InspectionRecord.task_id == task_id,
+                        InspectionRecord.status == "completed"
+                    ).count()
+                    task.status = "completed" if done_count >= len(MODULE_NAMES) else "in_progress"
+                    logger.warning(f"_check_and_trigger_report: 任务 {task_id} 卡在 reporting，重置为 {task.status}")
                     db.commit()
 
             # 已有报告 → 跳过
@@ -176,22 +181,16 @@ def _check_and_trigger_report(task_id: str):
             if existing_report:
                 return
 
-            # 检查是否所有分配的模块都已完成检查
-            from models.models import TaskAssignment
-            assigned_count = db.query(TaskAssignment).filter(
-                TaskAssignment.task_id == task.task_id
-            ).count()
+            # 检查所有模板模块是否全部完成（而非仅已分配模块）
+            from api.tasks import MODULE_NAMES
+            total_modules = len(MODULE_NAMES)
 
             completed_records = db.query(InspectionRecord).filter(
                 InspectionRecord.task_id == task_id,
                 InspectionRecord.status == "completed"
             ).all()
 
-            if not completed_records:
-                return
-
-            # 关键检查：已完成的模块数 == 分配的总模块数
-            if assigned_count > 0 and len(completed_records) < assigned_count:
+            if total_modules == 0 or len(completed_records) < total_modules:
                 return  # 还有模块未完成检查，不触发报告
 
             all_scored = True
@@ -846,6 +845,7 @@ def _build_scoring_results(task_id: str, db: Session) -> dict:
         if r.module_name not in modules_data:
             modules_data[r.module_name] = {
                 "module_name": r.module_name,
+                "record_id": r.record_id,
                 "items": [],
                 "raw_score_sum": 0,
                 "weight_sum": 0
@@ -898,6 +898,7 @@ def _build_scoring_results(task_id: str, db: Session) -> dict:
             "raw_score_sum": round(raw_score_sum, 4),
             "weight_ratio": module_weight,
             "weighted_contribution": round(weighted_contribution, 2),
+            "record_id": data.get("record_id"),
             "items": data["items"]
         })
 
@@ -951,6 +952,7 @@ async def get_scoring_summary(
                         "module_pct_score": m["module_pct_score"],
                         "weight_ratio": m["weight_ratio"],
                         "items_count": len(m.get("items", [])),
+                        "record_id": m.get("record_id"),
                     }
                     for m in full.get("modules", [])
                 ],
@@ -975,6 +977,15 @@ async def get_scoring_summary(
         ScoringResult.module_name
     ).all()
 
+    # 获取每个模块的 record_id
+    record_map = {}
+    records = db.query(InspectionRecord).filter(
+        InspectionRecord.task_id == task_id
+    ).all()
+    for r in records:
+        if r.module_name not in record_map:
+            record_map[r.module_name] = r.record_id
+
     module_map = {r.module_name: {"raw_sum": float(r.raw_sum or 0), "weight_sum": float(r.weight_sum or 0), "cnt": r.cnt} for r in rows}
 
     module_summaries = []
@@ -991,6 +1002,7 @@ async def get_scoring_summary(
             "module_pct_score": round(pct, 2),
             "weight_ratio": module_weight,
             "items_count": data["cnt"],
+            "record_id": record_map.get(module_name),
         })
 
     return {
@@ -1717,3 +1729,96 @@ async def get_review_queue(
         })
 
     return {"total": len(items), "items": items}
+
+
+@router.get("/review-queue", summary="获取全局评分复核列表")
+async def get_global_review_queue(
+    page: int = 1,
+    page_size: int = 20,
+    tab: str = "pending",
+    module_name: str = None,
+    db: Session = Depends(get_db),
+    current_user=Depends(check_role(["admin", "inspector", "site_supervisor"]))
+):
+    """全局评分复核列表，支持分页和筛选"""
+    from models.models import ScoringResult, InspectionRecord, InspectionTask
+
+    query = db.query(ScoringResult).join(
+        InspectionRecord, ScoringResult.record_id == InspectionRecord.record_id
+    ).join(
+        InspectionTask, InspectionRecord.task_id == InspectionTask.task_id
+    )
+
+    # Tab filtering
+    if tab == "pending":
+        query = query.filter(
+            ScoringResult.needs_human_review == True,
+            ScoringResult.human_reviewed == False,
+        )
+    elif tab == "reviewed":
+        query = query.filter(ScoringResult.human_reviewed == True)
+    elif tab == "edited":
+        query = query.filter(ScoringResult.is_edited == True)
+
+    # Module filter
+    if module_name:
+        query = query.filter(ScoringResult.module_name == module_name)
+
+    # Stats
+    total = query.count()
+    pending_count = db.query(ScoringResult).filter(
+        ScoringResult.needs_human_review == True,
+        ScoringResult.human_reviewed == False,
+    ).count()
+    reviewed_count = db.query(ScoringResult).filter(
+        ScoringResult.human_reviewed == True,
+    ).count()
+    edited_count = db.query(ScoringResult).filter(
+        ScoringResult.is_edited == True,
+    ).count()
+    # 低置信度占比（置信度 < 0.8）
+    total_with_confidence = db.query(ScoringResult).filter(
+        ScoringResult.confidence_score != None
+    ).count()
+    low_confidence_count = db.query(ScoringResult).filter(
+        ScoringResult.confidence_score < 0.8
+    ).count()
+    low_confidence_rate = round(low_confidence_count / total_with_confidence * 100, 1) if total_with_confidence > 0 else 0
+
+    # Paginate
+    results = query.order_by(ScoringResult.scored_at.desc()).offset((page - 1) * page_size).limit(page_size).all()
+
+    items = []
+    for r in results:
+        rec = r.record
+        task = rec.task if rec else None
+        items.append({
+            "scoring_id": r.scoring_id,
+            "result_id": r.id,
+            "task_id": task.task_id if task else "",
+            "project_name": task.project.name if task and task.project else "",
+            "check_date": task.check_date if task else "",
+            "module_name": r.module_name,
+            "item_id": r.item_id,
+            "item_name": r.item_name or "",
+            "score": float(r.score or 0),
+            "confidence_score": float(r.confidence_score or 0),
+            "scoring_basis": r.scoring_basis or "",
+            "is_edited": r.is_edited,
+            "human_reviewed": r.human_reviewed,
+        })
+
+    return {
+        "items": items,
+        "total": total,
+        "stats": {
+            "pending_count": pending_count,
+            "reviewed_count": reviewed_count,
+            "edited_count": edited_count,
+            "low_confidence_rate": low_confidence_rate,
+            # 保留旧字段名，兼容其他调用方
+            "pending": pending_count,
+            "reviewed": reviewed_count,
+            "edited": edited_count,
+        }
+    }

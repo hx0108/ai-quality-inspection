@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { closeToast } from 'vant'
 import { forceOverlayCleanup } from '../utils/overlayGuard'
+import { clearAuthSession, getAuthToken, getStoredUser } from '../utils/authStorage'
 
 const routes = [
   {
@@ -138,6 +139,18 @@ const routes = [
         component: () => import('../views/pc/LlmMonitor.vue'),
         meta: { requiresAuth: true, title: 'LLM监控' }
       },
+      {
+        path: 'scoring-management',
+        name: 'PcScoringManagement',
+        component: () => import('../views/pc/ScoringManagement.vue'),
+        meta: { requiresAuth: true, title: '评分复核' }
+      },
+      {
+        path: 'ai-metrics',
+        name: 'PcAiMetrics',
+        component: () => import('../views/pc/AiMetrics.vue'),
+        meta: { requiresAuth: true, title: '效果评估' }
+      },
     ]
   }
 ]
@@ -156,18 +169,17 @@ router.beforeEach((to, from, next) => {
   // Element Plus 遮罩清理（PC端）
   document.querySelectorAll('.el-loading-mask, .el-overlay').forEach(el => el.remove())
 
-  const token = localStorage.getItem('token')
+  const token = getAuthToken()
 
   // 前端检查 JWT 过期：解码 payload 中的 exp 字段
   if (token && isTokenExpired(token)) {
-    localStorage.removeItem('token')
-    localStorage.removeItem('user')
+    clearAuthSession()
     localStorage.removeItem('auth_state')
     next('/login')
     return
   }
 
-  const user = JSON.parse(localStorage.getItem('user') || '{}')
+  const user = getStoredUser()
 
   // 登录页始终可访问
   if (to.path === '/login' || to.path === '/') {

@@ -59,8 +59,9 @@ async def validate_input(state: dict) -> dict:
             return {"valid": False, "error_message": "跨时段对比需要选择一个项目"}
 
     elif mode == "all_projects":
-        if not state.get("time_range_start") or not state.get("time_range_end"):
-            return {"valid": False, "error_message": "全项目概览需要指定时间范围"}
+        project_ids = state.get("project_ids") or []
+        if len(project_ids) < 2:
+            return {"valid": False, "error_message": "全项目概览需要选择至少 2 个项目"}
 
     logger.info(f"输入验证通过, mode={mode}")
     return {"valid": True, "current_step": "validate_input", "progress_pct": 5}
@@ -150,26 +151,22 @@ async def collect_reports(state: dict) -> dict:
             label_b = f"{projects_info[1]['project_name']} T2 ({projects_info[1]['check_date']})"
 
         elif mode == "all_projects":
-            start = state.get("time_range_start", "2000-01-01")
-            end = state.get("time_range_end", "2099-12-31")
+            project_ids = state.get("project_ids") or []
 
-            # 查找时间范围内有报告的项目
-            tasks_in_range = db.query(InspectionTask).filter(
-                InspectionTask.check_date >= start,
-                InspectionTask.check_date <= end,
-                InspectionTask.status == "completed"
-            ).all()
-
-            task_ids = [t.task_id for t in tasks_in_range]
-            reports = db.query(Report).filter(
-                Report.task_id.in_(task_ids)
-            ).all()
+            # 查找每个选中项目的最新报告
+            reports = []
+            for pid in project_ids:
+                report = db.query(Report).join(
+                    InspectionTask, Report.task_id == InspectionTask.task_id
+                ).filter(
+                    InspectionTask.project_id == pid,
+                    InspectionTask.status == "completed"
+                ).order_by(Report.generated_at.desc()).first()
+                if report:
+                    reports.append(report)
 
             if len(reports) < 2:
-                return {"valid": False, "error_message": f"当前时间范围内仅有 {len(reports)} 个项目有报告，至少需要 2 个"}
-
-            if len(reports) > 20:
-                return {"valid": False, "error_message": f"匹配到 {len(reports)} 个项目，超过上限 20，请缩小时间范围"}
+                return {"valid": False, "error_message": f"选中的项目仅有 {len(reports)} 个有报告，至少需要 2 个"}
 
             for report in reports:
                 if not report.content_json:
@@ -195,7 +192,7 @@ async def collect_reports(state: dict) -> dict:
                         break
             reports_data = reports_data_sorted if reports_data_sorted else reports_data
 
-            label_a = f"全项目概览 ({start} ~ {end})"
+            label_a = f"全项目概览 ({len(projects_info)} 个项目)"
             label_b = f"共 {len(projects_info)} 个项目"
 
         logger.info(f"收集到 {len(reports_data)} 份报告数据")
@@ -460,6 +457,22 @@ async def generate_insight(state: dict) -> dict:
         "summary_b": summary_b,
         "module_analyses": module_analysis.get("modules", [])[:8]
     }
+
+    # 读取相关项目的历史记忆（零风险：无记忆则空串，prompt不变）
+    try:
+        from core.long_memory import LongMemory
+        memory_parts = []
+        for pi in projects_info:
+            pid = pi.get("project_id")
+            if pid:
+                ctx = LongMemory.build_memory_context(pid)
+                if ctx and ctx.strip():
+                    memory_parts.append(f"[{pi.get('project_name','项目' + str(pid))}]\n{ctx}")
+        if memory_parts:
+            comparison_data["memory_context"] = "\n\n".join(memory_parts[:3])  # 最多3个项目，控token
+            logger.info(f"已注入 {len(memory_parts[:3])} 个项目的历史记忆")
+    except Exception as e:
+        logger.warning(f"读取分析记忆失败(不影响主流程): {e}")
 
     # 调用 LLM
     logger.info("正在调用 DeepSeek-V3.2 生成洞察...")

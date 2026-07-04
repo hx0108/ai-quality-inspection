@@ -6,12 +6,14 @@
 
     <template v-else>
       <!-- 页面标题 -->
-      <div class="page-header">
-        <div class="page-header-left">
-          <h2 class="page-title">AI 能力分析</h2>
-          <p class="page-desc">大模型调用量、效能与费用全览</p>
-        </div>
-        <div class="header-actions">
+      <div class="phdr"><div>
+        <h1>AI 能力分析</h1>
+        <div class="phdr-sub">大模型调用量、效能与费用全览</div>
+      </div></div>
+
+      <!-- 时间范围筛选 -->
+      <div class="filters">
+        <div class="radio-group">
           <el-radio-group v-model="trendDays" size="default" @change="onDaysChange">
             <el-radio-button value="7">近7天</el-radio-button>
             <el-radio-button value="30">近30天</el-radio-button>
@@ -32,54 +34,43 @@
         </div>
       </div>
 
-      <!-- 核心指标卡片 -->
-      <div class="stat-grid">
-        <div class="stat-card" style="--accent: #7c3aed; --accent-light: #F5F3FF; --accent-grad: linear-gradient(135deg, #7c3aed 0%, #A78BFA 100%)">
-          <div class="stat-icon-box"><el-icon :size="22"><Cpu /></el-icon></div>
-          <div class="stat-body">
-            <span class="stat-label">本月调用</span>
-            <span class="stat-value">{{ overview.month.calls || 0 }}<span class="stat-unit">次</span></span>
-            <div class="stat-tags">
-              <span class="stat-tag">今日 {{ overview.today.calls || 0 }} 次</span>
-              <span v-if="callsChange !== null" :class="['stat-tag', callsChange >= 0 ? 'tag-green' : 'tag-red']">
-                环比 {{ callsChange >= 0 ? '+' : '' }}{{ callsChange }}%
-              </span>
-            </div>
+      <!-- KPI 指标卡片 -->
+      <div class="kpi-row cols-5">
+        <div class="kpi">
+          <div class="kpi-lbl">本月调用（次）</div>
+          <div class="kpi-num">{{ overview.month.calls || 0 }}</div>
+          <div class="kpi-tags">
+            <span v-if="callsChange !== null" :class="['kt', callsChange >= 0 ? 'kt-teal' : 'kt-err']">
+              {{ callsChange >= 0 ? '↑' : '↓' }} {{ Math.abs(callsChange) }}%
+            </span>
+            <span class="kt kt-muted">今日 {{ overview.today.calls || 0 }} 次</span>
           </div>
         </div>
-
-        <div class="stat-card" style="--accent: #059669; --accent-light: #ECFDF5; --accent-grad: linear-gradient(135deg, #059669 0%, #10b981 100%)">
-          <div class="stat-icon-box"><el-icon :size="22"><Tickets /></el-icon></div>
-          <div class="stat-body">
-            <span class="stat-label">本月 Tokens</span>
-            <span class="stat-value">{{ formatTokens(overview.month.tokens || 0) }}<span class="stat-unit">tokens</span></span>
-            <div class="stat-tags">
-              <span v-if="tokensChange !== null" :class="['stat-tag', tokensChange >= 0 ? 'tag-green' : 'tag-red']">
-                环比 {{ tokensChange >= 0 ? '+' : '' }}{{ tokensChange }}%
-              </span>
-            </div>
+        <div class="kpi">
+          <div class="kpi-lbl">本月 Tokens（tokens）</div>
+          <div class="kpi-num">{{ formatTokens(overview.month.tokens || 0).replace(/([A-Z])$/, '') }}<span class="kpi-unit">{{ (overview.month.tokens || 0) >= 1000000 ? 'M' : (overview.month.tokens || 0) >= 1000 ? 'K' : '' }}</span></div>
+          <div class="kpi-tags">
+            <span v-if="tokensChange !== null" :class="['kt', tokensChange >= 0 ? 'kt-teal' : 'kt-err']">
+              {{ tokensChange >= 0 ? '↑' : '↓' }} {{ Math.abs(tokensChange) }}%
+            </span>
           </div>
         </div>
-
-        <div class="stat-card" style="--accent: #2563eb; --accent-light: #EFF6FF; --accent-grad: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%)">
-          <div class="stat-icon-box"><el-icon :size="22"><Timer /></el-icon></div>
-          <div class="stat-body">
-            <span class="stat-label">本月平均耗时</span>
-            <span class="stat-value">{{ formatDuration(overview.month_avg_duration_ms || 0) }}</span>
-            <div class="stat-tags">
-              <span class="stat-tag">成功率 {{ overview.month_success_rate || 100 }}%</span>
-            </div>
+        <div class="kpi">
+          <div class="kpi-lbl">本月平均耗时</div>
+          <div class="kpi-num">{{ formatDuration(overview.month_avg_duration_ms || 0) }}</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-lbl">本月成功率（%）</div>
+          <div class="kpi-num">{{ overview.month_success_rate || 100 }}<span class="kpi-unit">%</span></div>
+          <div class="kpi-tags">
+            <span class="kt kt-ok">正常</span>
           </div>
         </div>
-
-        <div class="stat-card" style="--accent: #f59e0b; --accent-light: #FFFBEB; --accent-grad: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)">
-          <div class="stat-icon-box"><el-icon :size="22"><Money /></el-icon></div>
-          <div class="stat-body">
-            <span class="stat-label">本月费用估算</span>
-            <span class="stat-value">¥{{ costData.total_estimate || '0.00' }}</span>
-            <div class="stat-tags">
-              <span class="stat-tag tag-orange">基于公开定价</span>
-            </div>
+        <div class="kpi">
+          <div class="kpi-lbl">本月费用估算（¥）</div>
+          <div class="kpi-num">¥{{ costData.total_estimate || '0.00' }}</div>
+          <div class="kpi-tags">
+            <span class="kt kt-muted">基于公开定价</span>
           </div>
         </div>
       </div>
@@ -96,63 +87,41 @@
         </el-button>
       </div>
 
-      <!-- 趋势图 + Token占比饼图 + 耗时分布 -->
-      <div class="chart-grid">
-        <div class="chart-card main-chart">
-          <div class="chart-header">
-            <div class="chart-header-top">
-              <span class="chart-title">调用量与成功率趋势</span>
-              <div class="chart-meta">
-                <span class="meta-item">
-                  <span class="meta-label">日均调用</span>
-                  <span class="meta-value">{{ dailyAvg }}</span>
-                  <span class="meta-unit">次</span>
-                </span>
-                <span class="meta-divider">|</span>
-                <span class="meta-item">
-                  <span class="meta-label">日均Token</span>
-                  <span class="meta-value">{{ formatTokens(dailyAvgTokens) }}</span>
-                </span>
-                <span class="meta-divider">|</span>
-                <span class="meta-item">
-                  <span class="meta-label">累计调用</span>
-                  <span class="meta-value">{{ totalCalls }}</span>
-                  <span class="meta-unit">次</span>
-                </span>
-              </div>
-            </div>
-            <span class="chart-sub">每日调用次数 / Token消耗 / 成功率 / 平均耗时</span>
-          </div>
-          <div ref="trendChartRef" class="chart-container"></div>
+      <!-- 趋势图 -->
+      <div class="card">
+        <div class="card-h">
+          <span class="card-t">调用量与成功率趋势</span>
+          <span class="card-d">每日调用次数 / Token消耗 / 成功率 / 平均耗时</span>
         </div>
-        <div class="chart-side-stack">
-          <div class="chart-card">
-            <div class="chart-header">
-              <span class="chart-title">Token 占比</span>
-              <span class="chart-sub">按模型分布（{{ periodLabel }}）</span>
-            </div>
-            <div ref="pieChartRef" class="chart-container-sm"></div>
+        <div ref="trendChartRef" class="chart-area"></div>
+      </div>
+
+      <!-- Token占比饼图 + 耗时分布 -->
+      <div class="charts">
+        <div class="card">
+          <div class="card-h">
+            <span class="card-t">Token 占比</span>
+            <span class="card-d">按模型分布（{{ periodLabel }}）</span>
           </div>
-          <div class="chart-card">
-            <div class="chart-header">
-              <span class="chart-title">耗时分布</span>
-              <span class="chart-sub">各耗时区间调用次数</span>
-            </div>
-            <div ref="durationChartRef" class="chart-container-sm"></div>
+          <div ref="pieChartRef" class="chart-area chart-area-sm"></div>
+        </div>
+        <div class="card">
+          <div class="card-h">
+            <span class="card-t">耗时分布</span>
+            <span class="card-d">各耗时区间调用次数</span>
           </div>
+          <div ref="durationChartRef" class="chart-area chart-area-sm"></div>
         </div>
       </div>
 
-      <!-- 模型性能对比 + 按调用类型统计 -->
-      <div class="bottom-grid">
+      <!-- 模型统计 + 调用类型统计 -->
+      <div class="grid-2">
         <div class="card">
-          <div class="card-header">
-            <span class="card-title">模型统计</span>
-            <span class="chart-sub">{{ periodLabel }}</span>
-          </div>
+          <div class="card-h"><span class="card-t">模型统计</span><span class="card-d">{{ periodLabel }}</span></div>
           <el-table :data="overview.by_model" stripe size="small">
             <el-table-column prop="model" label="模型" min-width="130">
               <template #default="{ row }">
+                <span class="model-dot on"></span>
                 <span class="model-badge">{{ row.model }}</span>
               </template>
             </el-table-column>
@@ -166,21 +135,6 @@
                 <span class="num-gray">{{ formatTokens(row.tokens) }}</span>
               </template>
             </el-table-column>
-            <el-table-column label="Cache Miss / Prompt" align="right" width="115">
-              <template #default="{ row }">
-                <span class="num-gray">{{ formatTokens(row.cache_miss_tokens || row.prompt_tokens) }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="Cache Hit" align="right" width="90">
-              <template #default="{ row }">
-                <span class="num-gray">{{ (row.cache_hit_tokens || 0) > 0 ? formatTokens(row.cache_hit_tokens) : '-' }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column prop="completion_tokens" label="Output" align="right" width="80">
-              <template #default="{ row }">
-                <span class="num-gray">{{ formatTokens(row.completion_tokens) }}</span>
-              </template>
-            </el-table-column>
             <el-table-column prop="avg_duration_ms" label="平均耗时" align="right" width="80">
               <template #default="{ row }">
                 <span class="num-gray">{{ row.avg_duration_ms }}ms</span>
@@ -188,18 +142,14 @@
             </el-table-column>
             <el-table-column prop="success_rate" label="成功率" align="center" width="75">
               <template #default="{ row }">
-                <el-tag :type="row.success_rate >= 99 ? 'success' : 'warning'" size="small">
-                  {{ row.success_rate }}%
-                </el-tag>
+                <span :class="['sp', row.success_rate >= 99 ? 'sp-hi' : 'sp-mid']">{{ row.success_rate }}%</span>
               </template>
             </el-table-column>
           </el-table>
         </div>
 
         <div class="card">
-          <div class="card-header">
-            <span class="card-title">模型统计</span>
-          </div>
+          <div class="card-h"><span class="card-t">调用类型统计</span></div>
           <el-table :data="overview.by_type" stripe size="small">
             <el-table-column prop="type" label="调用类型" min-width="130">
               <template #default="{ row }">
@@ -223,20 +173,18 @@
             </el-table-column>
             <el-table-column prop="success_rate" label="成功率" align="center" width="80">
               <template #default="{ row }">
-                <el-tag :type="row.success_rate >= 99 ? 'success' : 'warning'" size="small">
-                  {{ row.success_rate }}%
-                </el-tag>
+                <span :class="['sp', row.success_rate >= 99 ? 'sp-hi' : 'sp-mid']">{{ row.success_rate }}%</span>
               </template>
             </el-table-column>
           </el-table>
         </div>
       </div>
 
-      <!-- 模型费用明细（单独一行） -->
-      <div class="card" style="margin-top: 16px;">
-        <div class="card-header">
-          <span class="card-title">模型统计</span>
-          <span class="chart-sub">{{ periodLabel }}</span>
+      <!-- 模型费用明细 -->
+      <div class="card">
+        <div class="card-h">
+          <span class="card-t">模型费用明细</span>
+          <span class="card-d">{{ periodLabel }}</span>
         </div>
         <el-table :data="costData.models" stripe size="small">
           <el-table-column prop="model" label="模型" min-width="110">
@@ -267,9 +215,7 @@
           </el-table-column>
           <el-table-column prop="success_rate" label="成功率" align="center" width="70">
             <template #default="{ row }">
-              <el-tag :type="row.success_rate >= 99 ? 'success' : 'warning'" size="small">
-                {{ row.success_rate }}%
-              </el-tag>
+              <span :class="['sp', row.success_rate >= 99 ? 'sp-hi' : 'sp-mid']">{{ row.success_rate }}%</span>
             </template>
           </el-table-column>
           <el-table-column prop="avg_duration_ms" label="耗时" align="right" width="65">
@@ -299,7 +245,7 @@
           </el-table-column>
           <el-table-column prop="total_cost" label="费用合计" align="right" width="85">
             <template #default="{ row }">
-              <span class="num" style="color: #dc2626; font-weight: 600;">¥{{ row.total_cost }}</span>
+              <span class="num cost-total">¥{{ row.total_cost }}</span>
             </template>
           </el-table-column>
         </el-table>
@@ -310,9 +256,12 @@
       </div>
 
       <!-- 调用记录明细 -->
-      <div class="card" style="margin-top: 16px;">
-        <div class="card-header">
-          <span class="card-title">调用记录明细</span>
+      <div class="card">
+        <div class="card-h">
+          <span class="card-t">调用记录明细</span>
+          <span class="card-d">最近 API 调用详情</span>
+        </div>
+        <div class="card-body">
           <div class="table-filters">
             <el-select v-model="filterModel" placeholder="全部模型" clearable size="small" style="width: 150px;" @change="fetchRecords">
               <el-option v-for="m in modelOptions" :key="m" :label="m" :value="m" />
@@ -325,58 +274,56 @@
               <el-option label="失败" value="false" />
             </el-select>
           </div>
-        </div>
-        <el-table :data="records" stripe size="small">
-          <el-table-column prop="timestamp" label="时间" width="155" />
-          <el-table-column prop="model_name" label="模型" min-width="120">
-            <template #default="{ row }">
-              <span class="model-badge">{{ row.model_name }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="call_type" label="类型" width="120">
-            <template #default="{ row }">
-              <span class="type-badge" :class="'type-' + row.call_type">{{ getTypeName(row.call_type) }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="prompt_tokens" label="Prompt" align="right" min-width="80">
-            <template #default="{ row }">
-              <span class="num-gray">{{ formatTokens(row.prompt_tokens) }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="completion_tokens" label="Completion" align="right" min-width="100">
-            <template #default="{ row }">
-              <span class="num-gray">{{ formatTokens(row.completion_tokens) }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="total_tokens" label="Total" align="right" min-width="80">
-            <template #default="{ row }">
-              <span class="num">{{ formatTokens(row.total_tokens) }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="duration_ms" label="耗时" align="right" min-width="80">
-            <template #default="{ row }">
-              <span class="num-gray">{{ row.duration_ms }}ms</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="task_id" label="关联任务" min-width="130" show-overflow-tooltip />
-          <el-table-column label="状态" width="70" align="center">
-            <template #default="{ row }">
-              <el-tag :type="row.success ? 'success' : 'danger'" size="small">
-                {{ row.success ? '成功' : '失败' }}
-              </el-tag>
-            </template>
-          </el-table-column>
-        </el-table>
-        <div class="pagination-wrap">
-          <el-pagination
-            v-model:current-page="recordsPage"
-            v-model:page-size="recordsPageSize"
-            :total="recordsTotal"
-            :page-sizes="[10, 20, 50, 100]"
-            layout="total, sizes, prev, pager, next"
-            @size-change="fetchRecords"
-            @current-change="fetchRecords"
-          />
+          <el-table :data="records" stripe size="small">
+            <el-table-column prop="timestamp" label="时间" width="155" />
+            <el-table-column prop="model_name" label="模型" min-width="120">
+              <template #default="{ row }">
+                <span class="model-badge">{{ row.model_name }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="call_type" label="类型" width="120">
+              <template #default="{ row }">
+                <span class="type-badge" :class="'type-' + row.call_type">{{ getTypeName(row.call_type) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="prompt_tokens" label="Prompt" align="right" min-width="80">
+              <template #default="{ row }">
+                <span class="num-gray">{{ formatTokens(row.prompt_tokens) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="completion_tokens" label="Completion" align="right" min-width="100">
+              <template #default="{ row }">
+                <span class="num-gray">{{ formatTokens(row.completion_tokens) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="total_tokens" label="Total" align="right" min-width="80">
+              <template #default="{ row }">
+                <span class="num">{{ formatTokens(row.total_tokens) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="duration_ms" label="耗时" align="right" min-width="80">
+              <template #default="{ row }">
+                <span class="num-gray">{{ row.duration_ms }}ms</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="task_id" label="关联任务" min-width="130" show-overflow-tooltip />
+            <el-table-column label="状态" width="70" align="center">
+              <template #default="{ row }">
+                <span :class="['sp', row.success ? 'sp-hi' : 'sp-lo']">{{ row.success ? '成功' : '失败' }}</span>
+              </template>
+            </el-table-column>
+          </el-table>
+          <div class="pagination-wrap">
+            <el-pagination
+              v-model:current-page="recordsPage"
+              v-model:page-size="recordsPageSize"
+              :total="recordsTotal"
+              :page-sizes="[10, 20, 50, 100]"
+              layout="total, sizes, prev, pager, next"
+              @size-change="fetchRecords"
+              @current-change="fetchRecords"
+            />
+          </div>
         </div>
       </div>
     </template>
@@ -386,7 +333,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import echarts from '../../utils/echarts'
-import { getLlmOverview, getLlmTrend, getLlmRecords, getLlmModels, getLlmCostEstimate } from '../../api/llm'
+import { getLlmOverview, getLlmTrend, getLlmRecords, getLlmModels, getLlmCostEstimate, getLlmDurationDistribution } from '../../api/llm'
 
 const loading = ref(false)
 const trendDays = ref('7')
@@ -596,7 +543,7 @@ const renderTrendChart = (trend) => {
         backgroundColor: 'rgba(255, 255, 255, 0.96)',
         borderColor: '#E2E8F0',
         borderWidth: 1,
-        textStyle: { color: '#334155', fontSize: 13 },
+        textStyle: { color: '#18181b', fontSize: 13 },
         extraCssText: 'box-shadow: 0 4px 12px rgba(0,0,0,0.08); border-radius: 8px;',
         formatter: (params) => {
           let html = `<div style="font-weight:600;margin-bottom:6px">${params[0].axisValue}</div>`
@@ -606,8 +553,8 @@ const renderTrendChart = (trend) => {
             else if (p.seriesName === '平均耗时') val = val + 'ms'
             else if (p.seriesName === 'Token消耗') val = formatTokens(val)
             html += `<div style="display:flex;align-items:center;gap:6px;margin:3px 0">
-              ${p.marker}<span style="color:#64748b">${p.seriesName}</span>
-              <span style="margin-left:auto;font-weight:600;color:#1e293b">${val}</span>
+              ${p.marker}<span style="color:#52525b">${p.seriesName}</span>
+              <span style="margin-left:auto;font-weight:600;color:#18181b">${val}</span>
             </div>`
           })
           return html
@@ -625,7 +572,7 @@ const renderTrendChart = (trend) => {
         itemGap: 16,
         itemWidth: 14,
         itemHeight: 10,
-        textStyle: { color: '#64748B', fontSize: 11 }
+        textStyle: { color: '#52525b', fontSize: 11 }
       },
       grid: { left: 56, right: 56, top: 44, bottom: 32 },
       xAxis: {
@@ -646,7 +593,7 @@ const renderTrendChart = (trend) => {
           position: 'left',
           axisLine: { show: false },
           axisTick: { show: false },
-          splitLine: { lineStyle: { color: '#F1F5F9', type: 'dashed' } },
+          splitLine: { lineStyle: { color: '#f4f4f5', type: 'dashed' } },
           axisLabel: { color: '#94A3B8', fontSize: 11, splitNumber: 5 }
         },
         {
@@ -675,7 +622,7 @@ const renderTrendChart = (trend) => {
           yAxisIndex: 0,
           itemStyle: {
             color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-              { offset: 0, color: '#7c3aed' },
+              { offset: 0, color: '#52525b' },
               { offset: 1, color: '#c4b5fd' }
             ]),
             borderRadius: [3, 3, 0, 0]
@@ -690,8 +637,8 @@ const renderTrendChart = (trend) => {
           smooth: true,
           symbol: 'circle',
           symbolSize: 5,
-          lineStyle: { color: '#10b981', width: 2.5 },
-          itemStyle: { color: '#10b981', borderWidth: 2, borderColor: '#fff' },
+          lineStyle: { color: '#16a34a', width: 2.5 },
+          itemStyle: { color: '#16a34a', borderWidth: 2, borderColor: '#fff' },
           areaStyle: {
             color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
               { offset: 0, color: 'rgba(16, 185, 129, 0.12)' },
@@ -707,8 +654,8 @@ const renderTrendChart = (trend) => {
           smooth: true,
           symbol: 'diamond',
           symbolSize: 5,
-          lineStyle: { color: '#f59e0b', width: 1.5, type: [4, 3] },
-          itemStyle: { color: '#f59e0b' },
+          lineStyle: { color: '#ca8a04', width: 1.5, type: [4, 3] },
+          itemStyle: { color: '#ca8a04' },
           tooltip: { valueFormatter: (val) => val + '%' }
         },
         {
@@ -719,8 +666,8 @@ const renderTrendChart = (trend) => {
           smooth: true,
           symbol: 'emptyCircle',
           symbolSize: 4,
-          lineStyle: { color: '#ec4899', width: 1.5 },
-          itemStyle: { color: '#ec4899' },
+          lineStyle: { color: '#ea580c', width: 1.5 },
+          itemStyle: { color: '#ea580c' },
           tooltip: { valueFormatter: (val) => val + 'ms' }
         }
       ]
@@ -728,75 +675,62 @@ const renderTrendChart = (trend) => {
   })
 }
 
-const renderDurationChart = () => {
-  nextTick(() => {
+const renderDurationChart = async () => {
+  nextTick(async () => {
     if (!durationChartRef.value) return
-    const recs = records.value
-    if (!recs.length) return
 
     if (!durationChart) {
       durationChart = echarts.init(durationChartRef.value)
     }
 
-    // 分桶：<500ms, 500-1s, 1-2s, 2-5s, >5s
-    const buckets = [
-      { label: '<500ms', min: 0, max: 500, count: 0 },
-      { label: '500ms-1s', min: 500, max: 1000, count: 0 },
-      { label: '1s-2s', min: 1000, max: 2000, count: 0 },
-      { label: '2s-5s', min: 2000, max: 5000, count: 0 },
-      { label: '>5s', min: 5000, max: Infinity, count: 0 },
-    ]
+    try {
+      const res = await getLlmDurationDistribution(trendDays.value)
+      const data = res.data || res
+      const buckets = data.buckets || []
 
-    recs.forEach(r => {
-      const d = r.duration_ms || 0
-      for (const b of buckets) {
-        if (d >= b.min && d < b.max) {
-          b.count++
-          break
-        }
-      }
-    })
+      const labels = buckets.map(b => b.label)
+      const counts = buckets.map(b => b.count)
 
-    const labels = buckets.map(b => b.label)
-    const counts = buckets.map(b => b.count)
-
-    durationChart.setOption({
-      tooltip: {
-        trigger: 'axis',
-        backgroundColor: 'rgba(255, 255, 255, 0.96)',
-        borderColor: '#E2E8F0',
-        borderWidth: 1,
-        textStyle: { color: '#334155', fontSize: 13 },
-        extraCssText: 'box-shadow: 0 4px 12px rgba(0,0,0,0.08); border-radius: 8px;',
-      },
-      grid: { left: 60, right: 20, top: 10, bottom: 25 },
-      xAxis: {
-        type: 'category',
-        data: labels,
-        axisLine: { show: false },
-        axisTick: { show: false },
-        axisLabel: { color: '#94A3B8', fontSize: 11 }
-      },
-      yAxis: {
-        type: 'value',
-        axisLine: { show: false },
-        axisTick: { show: false },
-        splitLine: { lineStyle: { color: '#F1F5F9', type: 'dashed' } },
-        axisLabel: { color: '#94A3B8', fontSize: 11 }
-      },
-      series: [{
-        type: 'bar',
-        data: counts,
-        itemStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: '#7c3aed' },
-            { offset: 1, color: '#ec4899' }
-          ]),
-          borderRadius: [4, 4, 0, 0]
+      durationChart.setOption({
+        tooltip: {
+          trigger: 'axis',
+          backgroundColor: 'rgba(255, 255, 255, 0.96)',
+          borderColor: '#E2E8F0',
+          borderWidth: 1,
+          textStyle: { color: '#18181b', fontSize: 13 },
+          extraCssText: 'box-shadow: 0 4px 12px rgba(0,0,0,0.08); border-radius: 8px;',
         },
-        barWidth: 28,
-      }]
-    })
+        grid: { left: 60, right: 20, top: 10, bottom: 25 },
+        xAxis: {
+          type: 'category',
+          data: labels,
+          axisLine: { show: false },
+          axisTick: { show: false },
+          axisLabel: { color: '#94A3B8', fontSize: 11 }
+        },
+        yAxis: {
+          type: 'value',
+          axisLine: { show: false },
+          axisTick: { show: false },
+          splitLine: { lineStyle: { color: '#f4f4f5', type: 'dashed' } },
+          axisLabel: { color: '#94A3B8', fontSize: 11 }
+        },
+        series: [{
+          type: 'bar',
+          data: counts,
+          itemStyle: {
+            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+              { offset: 0, color: '#52525b' },
+              { offset: 1, color: '#ea580c' }
+            ]),
+            borderRadius: [4, 4, 0, 0]
+          },
+          barWidth: 28,
+        }]
+      })
+    } catch (e) {
+      console.error('响应时长分布数据加载失败:', e)
+    }
   })
 }
 
@@ -810,7 +744,7 @@ const renderPieChart = () => {
       pieChart = echarts.init(pieChartRef.value)
     }
 
-    const colors = ['#7c3aed', '#2563eb', '#059669', '#f59e0b', '#dc2626', '#06b6d4']
+    const colors = ['#52525b', '#2563eb', '#16a34a', '#ca8a04', '#dc2626', '#14b8a6']
     const data = models.map((m, i) => ({
       name: m.model_name_cn || m.model,
       value: (m.prompt_tokens || 0) + (m.completion_tokens || 0),
@@ -823,7 +757,7 @@ const renderPieChart = () => {
         backgroundColor: 'rgba(255, 255, 255, 0.96)',
         borderColor: '#E2E8F0',
         borderWidth: 1,
-        textStyle: { color: '#334155', fontSize: 13 },
+        textStyle: { color: '#18181b', fontSize: 13 },
         formatter: (p) => `${p.name}<br/>Tokens: ${formatTokens(p.value)} (${p.percent}%)`
       },
       series: [{
@@ -833,7 +767,7 @@ const renderPieChart = () => {
         data,
         label: {
           fontSize: 11,
-          color: '#475569',
+          color: '#27272a',
           formatter: '{b}\n{d}%'
         },
         labelLine: { length: 12, length2: 8 },
@@ -873,132 +807,173 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* ── Page wrapper ── */
 .llm-monitor-page {
-  padding: 24px;
-  max-width: 1400px;
+  padding: 0;
+  max-width: none;
 }
 
 .loading-wrap {
   padding: 40px 0;
 }
 
-.page-header {
+/* ── Page header ── */
+.phdr {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
-  margin-bottom: 24px;
-}
-
-.page-header-left .page-title {
-  font-size: 22px;
-  font-weight: 600;
-  color: #1e293b;
-  margin: 0 0 4px;
-}
-
-.page-header-left .page-desc {
-  font-size: 13px;
-  color: #94a3b8;
-  margin: 0;
-}
-
-.stat-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
   margin-bottom: 20px;
 }
 
-.stat-card {
-  background: var(--accent-light);
-  border-radius: 12px;
-  padding: 16px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  position: relative;
-  overflow: hidden;
-  border: 1px solid rgba(0,0,0,0.04);
-  transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.stat-card::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 3px;
-  background: var(--accent-grad);
-}
-
-.stat-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-}
-
-.stat-icon-box {
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
-  background: var(--accent-light);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--accent);
-  flex-shrink: 0;
-}
-
-.stat-body {
-  flex: 1;
-  min-width: 0;
-}
-
-.stat-label {
-  font-size: 12px;
-  color: #64748b;
-  display: block;
-  margin-bottom: 2px;
-}
-
-.stat-value {
+.phdr h1 {
   font-size: 22px;
+  font-weight: 800;
+  color: var(--ink-900);
+  letter-spacing: -0.4px;
+  margin: 0;
+}
+
+.phdr-sub {
+  font-size: 13px;
+  color: var(--ink-400);
+  margin-top: 3px;
+}
+
+/* ── Filters ── */
+.filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.radio-group {
+  display: flex;
+  gap: 2px;
+  background: var(--bg-muted);
+  border-radius: var(--r);
+  padding: 3px;
+}
+
+/* ── KPI row ── */
+.kpi-row {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.kpi-row.cols-5 {
+  grid-template-columns: repeat(5, 1fr);
+}
+
+.kpi {
+  background: var(--bg-card);
+  border: 1px solid var(--ink-100);
+  border-radius: var(--r-lg);
+  padding: 18px 20px;
+  cursor: default;
+  transition: all 0.15s var(--ease);
+  animation: kpiIn 0.3s var(--ease) both;
+}
+
+.kpi:nth-child(2) { animation-delay: 30ms; }
+.kpi:nth-child(3) { animation-delay: 60ms; }
+.kpi:nth-child(4) { animation-delay: 90ms; }
+.kpi:nth-child(5) { animation-delay: 120ms; }
+
+.kpi:hover {
+  border-color: var(--ink-200);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.kpi-lbl {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-400);
+  margin-bottom: 6px;
+}
+
+.kpi-num {
+  font-family: var(--mono);
+  font-size: 32px;
   font-weight: 700;
-  color: #1e293b;
-  display: block;
-  line-height: 1.2;
+  color: var(--ink-900);
+  line-height: 1;
+  margin-bottom: 6px;
+  letter-spacing: -1.5px;
 }
 
-.stat-unit {
-  font-size: 12px;
-  font-weight: 400;
-  color: #94a3b8;
-  margin-left: 2px;
+.kpi-unit {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--ink-400);
+  letter-spacing: 0;
 }
 
-.stat-tags {
-  margin-top: 4px;
+.kpi-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
-.stat-tag {
+.kt {
   font-size: 11px;
-  background: rgba(0,0,0,0.04);
-  color: #64748b;
-  padding: 1px 6px;
-  border-radius: 4px;
-  margin-right: 4px;
+  font-family: var(--mono);
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 3px;
 }
 
-.stat-tag.tag-green { background: #ecfdf5; color: #059669; }
-.stat-tag.tag-red { background: #fef2f2; color: #dc2626; }
-.stat-tag.tag-orange { background: #fff7ed; color: #ea580c; }
+.kt-ok { background: var(--ok-bg); color: var(--ok); }
+.kt-warn { background: var(--warn-bg); color: var(--warn); }
+.kt-err { background: var(--err-bg); color: var(--err); }
+.kt-teal { background: var(--teal-50); color: var(--teal-700); }
+.kt-muted { background: var(--bg-muted); color: var(--ink-600); }
+.kt-blue { background: var(--blue-bg); color: var(--blue); }
 
-/* 失败记录横幅 */
+/* ── Card ── */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--ink-100);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  margin-bottom: 14px;
+  animation: kpiIn 0.3s var(--ease) 0.05s both;
+}
+
+.card-h {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--ink-100);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.card-t {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink-900);
+}
+
+.card-d {
+  font-size: 12px;
+  color: var(--ink-400);
+  margin-left: 8px;
+}
+
+.card-body {
+  padding: 16px 20px;
+}
+
+/* ── Failure banner ── */
 .failure-banner {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  border-radius: 10px;
+  background: var(--err-bg);
+  border: 1px solid var(--err-bg);
+  border-radius: var(--r-lg);
   padding: 12px 16px;
   margin-bottom: 16px;
 }
@@ -1008,142 +983,82 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  color: #991b1b;
+  color: var(--err);
 }
 
 .failure-banner-left strong {
-  color: #dc2626;
-  font-weight: 700;
+  color: var(--err);
+  font-weight: 800;
 }
 
-/* 趋势图 + 饼图/耗时分布 */
-.chart-grid {
-  display: grid;
-  grid-template-columns: 1fr 340px;
-  gap: 16px;
-  margin-bottom: 20px;
-}
-
-.chart-side-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.chart-card {
-  background: #fff;
-  border-radius: 12px;
-  padding: 20px;
-  border: 1px solid #e2e8f0;
-}
-
-.chart-container-sm {
+/* ── Chart areas ── */
+.chart-area {
   width: 100%;
-  height: 180px;
+  height: 380px;
+  padding: 0 4px;
 }
 
-.chart-header {
-  margin-bottom: 16px;
+.chart-area-sm {
+  height: 240px;
 }
 
-.chart-header-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 4px;
-}
-
-.chart-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-}
-
-.meta-item {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.meta-label {
-  color: #94a3b8;
-}
-
-.meta-value {
-  color: #1e293b;
-  font-weight: 600;
-  font-family: monospace;
-}
-
-.meta-unit {
-  color: #64748b;
-  font-size: 11px;
-}
-
-.meta-divider {
-  color: #e2e8f0;
-}
-
-.chart-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: #1e293b;
-}
-
-.chart-sub {
-  font-size: 12px;
-  color: #94a3b8;
-}
-
-.chart-container {
-  width: 100%;
-  height: 420px;
-}
-
-.bottom-grid {
+.charts {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  gap: 14px;
+  margin-bottom: 0;
 }
 
-.card {
-  background: #fff;
-  border-radius: 12px;
-  padding: 20px;
-  border: 1px solid #e2e8f0;
+.charts .card {
+  animation-delay: 0.1s;
 }
 
-.card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 16px;
+/* ── Grid 2-col ── */
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 0;
 }
 
-.card-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: #1e293b;
+.grid-2 .card {
+  animation-delay: 0.12s;
 }
 
+/* ── Table filters ── */
 .table-filters {
   display: flex;
   gap: 8px;
   align-items: center;
+  margin-bottom: 12px;
 }
 
+/* ── Model dot ── */
+.model-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 4px;
+}
+
+.model-dot.on { background: var(--ok); }
+.model-dot.off { background: var(--err); }
+.model-dot.warn { background: var(--warn); }
+
+/* ── Model badge ── */
 .model-badge {
   display: inline-block;
-  background: #f1f5f9;
-  color: #475569;
+  background: var(--ink-100);
+  color: var(--ink-800);
   font-size: 12px;
   padding: 2px 8px;
   border-radius: 6px;
   font-weight: 500;
-  font-family: monospace;
+  font-family: var(--mono);
 }
 
+/* ── Type badge ── */
 .type-badge {
   display: inline-block;
   font-size: 11px;
@@ -1152,58 +1067,88 @@ onUnmounted(() => {
   font-weight: 500;
 }
 
-.type-scoring { background: #eff6ff; color: #2563eb; }
-.type-analysis { background: #f5f3ff; color: #7c3aed; }
-.type-report { background: #ecfdf5; color: #059669; }
-.type-rectification_check { background: #fff7ed; color: #ea580c; }
+.type-scoring { background: var(--blue-bg); color: var(--blue); }
+.type-analysis { background: #f5f3ff; color: var(--ink-600); }
+.type-report { background: var(--ok-bg); color: var(--ok); }
+.type-rectification_check { background: var(--orange-light); color: var(--orange); }
 
+/* ── Score pill ── */
+.sp {
+  display: inline-block;
+  min-width: 32px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.sp-hi { background: var(--ok-bg); color: var(--ok); }
+.sp-mid { background: var(--warn-bg); color: var(--warn); }
+.sp-lo { background: var(--err-bg); color: var(--err); }
+
+/* ── Numbers ── */
 .num {
   font-weight: 600;
-  color: #1e293b;
-  font-family: monospace;
+  color: var(--ink-900);
+  font-family: var(--mono);
 }
 
 .num-gray {
-  color: #64748b;
-  font-family: monospace;
+  color: var(--ink-600);
+  font-family: var(--mono);
   font-size: 12px;
 }
 
+.cost-total {
+  color: var(--err);
+  font-weight: 700;
+}
+
+/* ── Cost summary ── */
 .cost-summary {
   margin-top: 12px;
   padding: 12px 16px;
-  background: #f8fafc;
+  background: var(--bg-muted);
   border-radius: 8px;
   font-size: 13px;
-  color: #475569;
+  color: var(--ink-800);
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 
 .cost-summary strong {
-  color: #dc2626;
+  color: var(--err);
   font-size: 16px;
 }
 
 .cost-note {
   font-size: 11px;
-  color: #94a3b8;
+  color: var(--ink-400);
 }
 
+/* ── Pagination ── */
 .pagination-wrap {
   margin-top: 16px;
   display: flex;
   justify-content: flex-end;
 }
 
+/* ── Animation ── */
+@keyframes kpiIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Responsive ── */
 @media (max-width: 1200px) {
-  .stat-grid { grid-template-columns: repeat(3, 1fr); }
-  .chart-grid { grid-template-columns: 1fr; }
-  .bottom-grid { grid-template-columns: 1fr; }
+  .kpi-row.cols-5 { grid-template-columns: repeat(3, 1fr); }
+  .charts, .grid-2 { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 900px) {
-  .stat-grid { grid-template-columns: repeat(2, 1fr); }
+  .kpi-row.cols-5 { grid-template-columns: repeat(2, 1fr); }
 }
 </style>

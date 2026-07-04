@@ -1,3 +1,5 @@
+import { getAuthToken } from './authStorage'
+
 /**
  * 照片签名工具 — 使用 Web Crypto API 生成 HMAC-SHA256 防篡改签名
  *
@@ -58,7 +60,7 @@ export async function signPhotoMeta(meta, imageBlob) {
  * 使用与后端一致的 SECRET_KEY 派生
  */
 function _getSecretKey() {
-  const token = localStorage.getItem('token')
+  const token = getAuthToken()
   if (!token) return ''
   // 使用 token 的一部分作为密钥材料（与后端 settings.SECRET_KEY 对应）
   // 实际生产中应该从后端获取签名密钥，这里简化处理

@@ -81,6 +81,9 @@
                     <van-tag plain size="small" :type="item.severity === '严重' ? 'danger' : 'warning'">
                       {{ item.severity }}
                     </van-tag>
+                    <span v-if="item.deadline" class="rect-deadline" :class="{ 'rect-overdue': isOverdue(item.deadline), 'rect-expiring': isExpiring(item.deadline) }">
+                      截止 {{ item.deadline }}
+                    </span>
                   </div>
 
                   <!-- AI 审核结果 -->
@@ -133,12 +136,12 @@
                       {{ item.review_note ? '重新整改' : '上传整改' }}
                     </van-button>
                     <van-button
-                      v-if="item.status === 'ai_rejected'"
+                      v-if="item.status === 'ai_rejected' && authStore.isProjectStaff"
                       type="warning"
                       size="small"
                       round
                       plain
-                      @click="doAppeal(item)"
+                      @click="openAppeal(item)"
                     >
                       申诉
                     </van-button>
@@ -169,22 +172,35 @@
       <van-tabbar-item icon="bar-chart-o" to="/analysis-mobile">分析</van-tabbar-item>
     </van-tabbar>
 
-    <van-action-sheet v-model:show="showUser" title="个人信息">
-      <div class="user-info">
-        <van-cell title="用户名" :value="user.username" />
-        <van-cell title="姓名" :value="user.real_name" />
-        <van-cell title="角色" :value="getRoleText(user.role)" />
-        <van-button block type="danger" @click="onLogout" style="margin-top: 20px">退出登录</van-button>
+    <MobileUserSheet v-model:show="showUser" />
+
+    <!-- 申诉对话框 -->
+    <van-dialog
+      v-model:show="showAppealDialog"
+      title="提交申诉"
+      show-cancel-button
+      :before-close="onAppealBeforeClose"
+    >
+      <div style="padding: 16px">
+        <van-field
+          v-model="appealNote"
+          type="textarea"
+          rows="3"
+          placeholder="请说明申诉理由"
+          maxlength="500"
+          show-word-limit
+        />
       </div>
-    </van-action-sheet>
+    </van-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { showToast } from 'vant'
+import { showToast, showSuccessToast } from 'vant'
 import { useAuthStore } from '../../stores/auth'
+import MobileUserSheet from '../../components/MobileUserSheet.vue'
 import { getPendingRectifications, appealRectification } from '../../api/rectification'
 
 const router = useRouter()
@@ -192,7 +208,9 @@ const authStore = useAuthStore()
 
 const activeTab = ref(3)
 const showUser = ref(false)
-const user = computed(() => authStore.user || {})
+const showAppealDialog = ref(false)
+const appealNote = ref('')
+const appealTarget = ref(null)
 const loading = ref(false)
 const refreshing = ref(false)
 const items = ref([])
@@ -346,6 +364,16 @@ const getStatusText = (status) => {
   return map[status] || status
 }
 
+const isOverdue = (deadline) => {
+  if (!deadline) return false
+  return new Date(deadline) < new Date(new Date().toISOString().slice(0, 10))
+}
+const isExpiring = (deadline) => {
+  if (!deadline) return false
+  const diff = (new Date(deadline) - new Date(new Date().toISOString().slice(0, 10))) / 86400000
+  return diff > 0 && diff <= 5
+}
+
 const formatTime = (isoStr) => {
   if (!isoStr) return ''
   return isoStr.slice(0, 16).replace('T', ' ')
@@ -376,22 +404,30 @@ const goSubmit = (item) => {
   router.push(`/rectification/${item.rectification_id}`)
 }
 
-const doAppeal = async (item) => {
-  try {
-    await appealRectification(item.rectification_id, { appeal_note: '项目人员申请人工审核' })
-    showToast('申诉已提交')
-    fetchData()
-  } catch (e) {
-    showToast(e.response?.data?.detail || '申诉失败')
+const openAppeal = (item) => {
+  appealTarget.value = item
+  appealNote.value = ''
+  showAppealDialog.value = true
+}
+
+const onAppealBeforeClose = async (action) => {
+  if (action === 'confirm') {
+    if (!appealNote.value.trim()) {
+      showToast('请填写申诉理由')
+      return false
+    }
+    try {
+      await appealRectification(appealTarget.value.rectification_id, { appeal_note: appealNote.value.trim() })
+      showSuccessToast('申诉已提交')
+      fetchData()
+      return true
+    } catch (e) {
+      showToast(e.response?.data?.detail || '申诉失败')
+      return false
+    }
   }
+  return true
 }
-
-const getRoleText = (role) => {
-  const map = { admin: '管理员', inspector: '检查员', site_supervisor: '阵地督导', field_supervisor: '驻场经理', project_staff: '项目人员' }
-  return map[role] || role
-}
-
-const onLogout = () => { authStore.logout() }
 
 onMounted(fetchData)
 </script>
@@ -555,6 +591,17 @@ onMounted(fetchData)
   color: #9ba3af;
   margin-top: 6px;
 }
+.rect-deadline {
+  font-size: 11px;
+  color: #9ba3af;
+}
+.rect-deadline.rect-overdue {
+  color: #ee0a24;
+  font-weight: 500;
+}
+.rect-deadline.rect-expiring {
+  color: #ff976a;
+}
 
 /* AI 审核结果 */
 .ai-result-block {
@@ -633,5 +680,4 @@ onMounted(fetchData)
   border-top: 1px solid #f0f0f0;
 }
 
-.user-info { padding: 16px; }
 </style>

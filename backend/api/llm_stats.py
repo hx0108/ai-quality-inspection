@@ -458,3 +458,43 @@ async def get_llm_cost_estimate(
         "currency": "元（人民币）",
         "models": items,
     }
+
+
+@router.get("/duration-distribution", summary="LLM耗时分布")
+async def get_llm_duration_distribution(
+    days: int = Query(default=30, ge=1, le=90),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """返回近N天LLM调用的耗时分布（分桶统计）"""
+    now = datetime.utcnow()
+    start_date = now - timedelta(days=days)
+
+    durations = db.query(
+        LlmUsageLog.duration_ms,
+    ).filter(
+        LlmUsageLog.timestamp >= start_date,
+        LlmUsageLog.duration_ms.isnot(None),
+    ).all()
+
+    # 定义耗时分桶
+    bucket_defs = [
+        ("<1s", lambda d: d < 1000),
+        ("1-3s", lambda d: 1000 <= d < 3000),
+        ("3-5s", lambda d: 3000 <= d < 5000),
+        ("5-10s", lambda d: 5000 <= d < 10000),
+        ("10-30s", lambda d: 10000 <= d < 30000),
+        ("30-60s", lambda d: 30000 <= d < 60000),
+        (">60s", lambda d: d >= 60000),
+    ]
+
+    buckets = [{"label": label, "count": 0} for label, _ in bucket_defs]
+
+    for row in durations:
+        d = row.duration_ms or 0
+        for i, (_, matcher) in enumerate(bucket_defs):
+            if matcher(d):
+                buckets[i]["count"] += 1
+                break
+
+    return {"buckets": buckets, "days": days}

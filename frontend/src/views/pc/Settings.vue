@@ -1,86 +1,259 @@
 <template>
-  <div class="pc-settings">
-    <el-tabs v-model="activeTab" class="styled-tabs">
-      <!-- ==================== 用户管理 ==================== -->
-      <el-tab-pane label="用户管理" name="users">
-        <el-card shadow="never" class="content-card">
-          <div class="card-toolbar">
-            <el-input v-model="userSearch" placeholder="搜索用户名/姓名/手机号" clearable style="width: 260px" />
-            <el-button type="primary" @click="openUserDialog()" class="add-btn">
-              <el-icon><Plus /></el-icon> 新增用户
-            </el-button>
-          </div>
-          <el-table :data="filteredUsers" v-loading="userLoading" stripe class="styled-table">
-            <el-table-column prop="id" label="ID" width="60" />
-            <el-table-column prop="username" label="用户名" width="120" />
-            <el-table-column prop="phone" label="手机号" width="130">
-              <template #default="{ row }">{{ row.phone || '—' }}</template>
-            </el-table-column>
-            <el-table-column prop="real_name" label="姓名" width="120" />
-            <el-table-column prop="role" label="角色" width="120">
-              <template #default="{ row }">
-                <el-tag :type="roleTagType(row.role)">{{ roleLabel(row.role) }}</el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column prop="project_name" label="项目归属" min-width="120">
-              <template #default="{ row }">{{ row.project_name || '—' }}</template>
-            </el-table-column>
-            <el-table-column prop="is_active" label="状态" width="80">
-              <template #default="{ row }">
-                <el-tag :type="row.is_active ? 'success' : 'danger'">{{ row.is_active ? '启用' : '禁用' }}</el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column prop="created_at" label="创建时间" width="180">
-              <template #default="{ row }">{{ formatDate(row.created_at) }}</template>
-            </el-table-column>
-            <el-table-column label="操作" width="260" fixed="right">
-              <template #default="{ row }">
-                <el-button link type="primary" size="small" @click="openUserDialog(row)">编辑</el-button>
-                <el-button link type="primary" size="small" @click="openResetPwdDialog(row)">重置密码</el-button>
-                <el-button link :type="row.is_active ? 'warning' : 'success'" size="small" @click="toggleActive(row)">
-                  {{ row.is_active ? '禁用' : '启用' }}
-                </el-button>
-                <el-button link type="danger" size="small" @click="onDeleteUser(row)">删除</el-button>
-              </template>
-            </el-table-column>
-          </el-table>
-        </el-card>
-      </el-tab-pane>
+  <div class="settings-page">
+    <!-- Page header -->
+    <div class="phdr">
+      <div>
+        <h1>系统设置</h1>
+      </div>
+      <div class="phdr-acts">
+        <button class="btn" @click="openChangeMyPwdDialog">
+          <svg viewBox="0 0 16 16"><path d="M8 10V6M6 8h4" stroke-width="1.5" fill="none" stroke="currentColor"/><rect x="3" y="7" width="10" height="6" rx="1.5" stroke-width="1.3" fill="none" stroke="currentColor"/></svg>
+          修改密码
+        </button>
+      </div>
+    </div>
 
-      <!-- ==================== 项目管理 ==================== -->
-      <el-tab-pane label="项目管理" name="projects">
-        <el-card shadow="never" class="content-card">
-          <div class="card-toolbar">
-            <el-input v-model="projectSearch" placeholder="搜索项目名称" clearable style="width: 240px" />
-            <el-button type="primary" @click="openProjectDialog()" class="add-btn">
-              <el-icon><Plus /></el-icon> 新增项目
-            </el-button>
-          </div>
-          <el-table :data="filteredProjects" v-loading="projectLoading" stripe class="styled-table">
-            <el-table-column prop="id" label="ID" width="60" />
-            <el-table-column prop="name" label="项目名称" min-width="200" />
-            <el-table-column prop="code" label="项目编码" width="120" />
-            <el-table-column prop="address" label="项目地址" min-width="200" />
-            <el-table-column prop="created_at" label="创建时间" width="180">
-              <template #default="{ row }">{{ formatDate(row.created_at) }}</template>
-            </el-table-column>
-            <el-table-column label="操作" width="160" fixed="right">
-              <template #default="{ row }">
-                <el-button size="small" @click="openProjectDialog(row)">编辑</el-button>
-                <el-button size="small" type="danger" @click="onDeleteProject(row)">删除</el-button>
-              </template>
-            </el-table-column>
-          </el-table>
-        </el-card>
-      </el-tab-pane>
-    </el-tabs>
+    <!-- Tab navigation -->
+    <div class="set-tabs">
+      <button class="set-tab" :class="{ on: activeTab === 'users' }" @click="activeTab = 'users'">用户管理</button>
+      <button class="set-tab" :class="{ on: activeTab === 'projects' }" @click="activeTab = 'projects'">项目管理</button>
+      <button class="set-tab" :class="{ on: activeTab === 'backup' }" @click="activeTab = 'backup'">数据备份</button>
+      <button class="set-tab" :class="{ on: activeTab === 'apikeys' }" @click="activeTab = 'apikeys'">AI模型配置</button>
+    </div>
+
+    <!-- ==================== 用户管理 ==================== -->
+    <div class="set-panel" :class="{ on: activeTab === 'users' }">
+      <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+        <input class="f-input" v-model="userSearch" placeholder="搜索姓名/手机号" style="min-width: 220px" />
+        <button class="btn btn-primary" @click="openUserDialog()" style="margin-left: auto;">
+          <svg viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></svg>新增用户
+        </button>
+      </div>
+      <div class="card">
+        <table class="tbl">
+          <thead>
+            <tr>
+              <th>ID</th><th>手机号</th><th>姓名</th><th>角色</th><th>项目归属</th><th>状态</th><th>创建时间</th><th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-if="userLoading">
+              <td colspan="8" style="text-align:center;padding:40px;color:var(--ink-400)">加载中...</td>
+            </tr>
+            <tr v-else-if="filteredUsers.length === 0">
+              <td colspan="8" style="text-align:center;padding:40px;color:var(--ink-400)">暂无数据</td>
+            </tr>
+            <tr v-for="row in filteredUsers" :key="row.id">
+              <td>{{ row.id }}</td>
+              <td style="font-family:var(--mono)">{{ row.phone || '—' }}</td>
+              <td style="text-align:left;font-family:var(--sans);font-weight:600;color:var(--ink-900)">{{ row.real_name }}</td>
+              <td><span class="kt" :class="roleKtClass(row.role)">{{ roleLabel(row.role) }}</span></td>
+              <td style="text-align:left;font-family:var(--sans)">
+                <template v-if="['inspector', 'site_supervisor', 'admin'].includes(row.role)">阵地</template>
+                <template v-else-if="row.project_names && row.project_names.length">
+                  <span v-for="name in row.project_names" :key="name" class="kt kt-blue" style="margin-right:4px">{{ name }}</span>
+                </template>
+                <template v-else>—</template>
+              </td>
+              <td><span class="st" :class="row.is_active ? 'st-done' : 'st-pending'">{{ row.is_active ? '启用' : '禁用' }}</span></td>
+              <td style="font-family:var(--mono);font-size:12px;color:var(--ink-400)">{{ formatDate(row.created_at) }}</td>
+              <td>
+                <button class="act" @click="openUserDialog(row)">编辑</button>
+                <button class="act" @click="openResetPwdDialog(row)">重置密码</button>
+                <button v-if="row.is_active" class="act act-err" @click="toggleActive(row)">禁用</button>
+                <button v-else class="act act-ok" @click="toggleActive(row)">启用</button>
+                <button class="act act-err" @click="onDeleteUser(row)">删除</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ==================== 项目管理 ==================== -->
+    <div class="set-panel" :class="{ on: activeTab === 'projects' }">
+      <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+        <input class="f-input" v-model="projectSearch" placeholder="搜索项目名称" style="min-width: 220px" />
+        <button class="btn btn-primary" @click="openProjectDialog()" style="margin-left: auto;">
+          <svg viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></svg>新增项目
+        </button>
+      </div>
+      <div class="card">
+        <table class="tbl">
+          <thead>
+            <tr>
+              <th>ID</th><th>项目名称</th><th>项目编码</th><th>项目地址</th><th>创建时间</th><th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-if="projectLoading">
+              <td colspan="6" style="text-align:center;padding:40px;color:var(--ink-400)">加载中...</td>
+            </tr>
+            <tr v-else-if="filteredProjects.length === 0">
+              <td colspan="6" style="text-align:center;padding:40px;color:var(--ink-400)">暂无数据</td>
+            </tr>
+            <tr v-for="row in filteredProjects" :key="row.id">
+              <td>{{ row.id }}</td>
+              <td style="text-align:left;font-family:var(--sans);font-weight:600;color:var(--ink-900)">{{ row.name }}</td>
+              <td style="font-family:var(--mono)">{{ row.code || '—' }}</td>
+              <td style="text-align:left;font-family:var(--sans)">{{ row.address || '—' }}</td>
+              <td style="font-family:var(--mono);font-size:12px;color:var(--ink-400)">{{ formatDate(row.created_at) }}</td>
+              <td>
+                <button class="act" @click="openProjectDialog(row)">编辑</button>
+                <button class="act act-err" @click="onDeleteProject(row)">删除</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ==================== 数据备份 ==================== -->
+    <div class="set-panel" :class="{ on: activeTab === 'backup' }">
+      <!-- 状态概览 -->
+      <div class="bk-grid">
+        <div class="bk-item">
+          <div class="bk-label">数据库</div>
+          <div class="bk-val">{{ backupStatus.db_size_mb ?? '—' }} MB</div>
+          <div class="bk-status">● 正常</div>
+        </div>
+        <div class="bk-item">
+          <div class="bk-label">照片</div>
+          <div class="bk-val">{{ backupStatus.photos_size_mb ?? '—' }} MB</div>
+          <div class="bk-status">● 正常</div>
+        </div>
+        <div class="bk-item">
+          <div class="bk-label">报告</div>
+          <div class="bk-val">{{ backupStatus.reports_size_mb ?? '—' }} MB</div>
+          <div class="bk-status">● 正常</div>
+        </div>
+        <div class="bk-item">
+          <div class="bk-label">总数据量</div>
+          <div class="bk-val">{{ backupStatus.total_data_size_mb ?? '—' }} MB</div>
+          <div class="bk-status">● 正常</div>
+        </div>
+        <div class="bk-item">
+          <div class="bk-label">外部备份</div>
+          <div class="bk-val">{{ backupStatus.external_backup_count ?? 0 }} 个</div>
+          <div class="bk-status">● 最新</div>
+        </div>
+        <div class="bk-item">
+          <div class="bk-label">最近备份</div>
+          <div class="bk-val">{{ backupStatus.last_backup ? backupStatus.last_backup.created_at?.slice(0,19).replace('T',' ') : '无' }}</div>
+          <div class="bk-status">● 自动</div>
+        </div>
+      </div>
+
+      <!-- 筛选与操作 -->
+      <div class="filters" style="margin-bottom: 12px">
+        <div class="radio-group">
+          <button class="radio-btn" :class="{ on: backupTypeFilter === '' }" @click="backupTypeFilter = ''; fetchBackupList()">全部</button>
+          <button class="radio-btn" :class="{ on: backupTypeFilter === 'full' }" @click="backupTypeFilter = 'full'; fetchBackupList()">完整备份</button>
+          <button class="radio-btn" :class="{ on: backupTypeFilter === 'daily' }" @click="backupTypeFilter = 'daily'; fetchBackupList()">每日DB</button>
+          <button class="radio-btn" :class="{ on: backupTypeFilter === 'hourly' }" @click="backupTypeFilter = 'hourly'; fetchBackupList()">每小时DB</button>
+          <button class="radio-btn" :class="{ on: backupTypeFilter === 'pre_restore' }" @click="backupTypeFilter = 'pre_restore'; fetchBackupList()">恢复前</button>
+        </div>
+        <div style="margin-left: auto; display: flex; gap: 6px">
+          <button class="btn btn-primary" @click="onCreateBackup('full')" :disabled="creatingBackup">
+            {{ creatingBackup ? '备份中...' : '创建完整备份' }}
+          </button>
+          <button class="btn" @click="onCreateBackup('hourly')" :disabled="creatingBackup">
+            {{ creatingBackup ? '备份中...' : '创建DB备份' }}
+          </button>
+        </div>
+      </div>
+
+      <!-- 备份列表 -->
+      <div class="card">
+        <table class="tbl">
+          <thead>
+            <tr>
+              <th>文件名</th><th>类型</th><th>大小</th><th>创建时间</th><th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-if="backupLoading">
+              <td colspan="5" style="text-align:center;padding:40px;color:var(--ink-400)">加载中...</td>
+            </tr>
+            <tr v-else-if="backupList.length === 0">
+              <td colspan="5" style="text-align:center;padding:40px;color:var(--ink-400)">暂无数据</td>
+            </tr>
+            <tr v-for="row in backupList" :key="row.filename">
+              <td style="text-align:left;font-family:var(--mono);font-size:12px;color:var(--ink-600)">{{ row.filename }}</td>
+              <td><span class="kt" :class="backupTypeKtClass(row.type)">{{ backupTypeLabel(row.type) }}</span></td>
+              <td style="font-family:var(--mono)">{{ row.size_mb }} MB</td>
+              <td style="font-family:var(--mono);font-size:12px;color:var(--ink-400)">{{ row.created_at?.slice(0,19).replace('T',' ') || '-' }}</td>
+              <td>
+                <button class="act act-warn" @click="onRestoreBackup(row)">恢复</button>
+                <button class="act act-err" @click="onDeleteBackup(row)">删除</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ==================== AI模型配置 ==================== -->
+    <div class="set-panel" :class="{ on: activeTab === 'apikeys' }">
+      <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+        <span style="font-size: 14px; color: var(--ink-400);">管理 AI 模型的 API 密钥，修改后立即生效，无需重启服务</span>
+        <button class="btn" @click="fetchApiKeys" style="margin-left: auto;">
+          <svg viewBox="0 0 16 16" style="width:14px;height:14px"><path d="M8 1v2M8 13v2M1 8h2M13 8h2" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+          刷新
+        </button>
+      </div>
+      <div class="card">
+        <table class="tbl">
+          <thead>
+            <tr>
+              <th>模型</th><th>API 密钥</th><th>状态</th><th>更新时间</th><th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-if="apiKeysLoading">
+              <td colspan="5" style="text-align:center;padding:40px;color:var(--ink-400)">加载中...</td>
+            </tr>
+            <tr v-else-if="apiKeys.length === 0">
+              <td colspan="5" style="text-align:center;padding:40px;color:var(--ink-400)">暂无数据</td>
+            </tr>
+            <tr v-for="row in apiKeys" :key="row.name">
+              <td style="font-weight:600;color:var(--ink-900)">{{ row.display_name }}</td>
+              <td style="font-family:var(--mono);font-size:13px;color:var(--ink-500)">{{ row.masked_value || '—' }}</td>
+              <td>
+                <span class="st" :class="row.is_set ? 'st-done' : 'st-pending'">{{ row.is_set ? '已配置' : '未配置' }}</span>
+              </td>
+              <td style="font-family:var(--mono);font-size:12px;color:var(--ink-400)">{{ row.updated_at ? row.updated_at.slice(0,19).replace('T',' ') : '—' }}</td>
+              <td>
+                <button class="act" @click="openApiKeyDialog(row)">编辑</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- API KEY 编辑弹窗 -->
+    <el-dialog v-model="apiKeyDialogVisible" title="更新 API 密钥" width="480px" class="styled-dialog">
+      <el-form label-width="100px">
+        <el-form-item label="模型">
+          <span style="font-weight:600">{{ editingApiKey.display_name }}</span>
+        </el-form-item>
+        <el-form-item label="当前密钥">
+          <span style="font-family:var(--mono);color:var(--ink-400)">{{ editingApiKey.masked_value || '未配置' }}</span>
+        </el-form-item>
+        <el-form-item label="新密钥" required>
+          <el-input v-model="newApiKeyValue" type="password" show-password placeholder="请输入新的 API 密钥" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="apiKeyDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="onSaveApiKey" :loading="savingApiKey">确认更新</el-button>
+      </template>
+    </el-dialog>
 
     <!-- 用户编辑弹窗 -->
     <el-dialog v-model="userDialogVisible" :title="editingUser.id ? '编辑用户' : '新增用户'" width="480px" class="styled-dialog">
       <el-form :model="editingUser" label-width="80px">
-        <el-form-item label="用户名" required>
-          <el-input v-model="editingUser.username" :disabled="!!editingUser.id" />
-        </el-form-item>
         <el-form-item label="手机号">
           <el-input v-model="editingUser.phone" placeholder="请输入手机号（用于登录）" maxlength="11" />
         </el-form-item>
@@ -101,7 +274,7 @@
           </el-select>
         </el-form-item>
         <el-form-item label="项目归属">
-          <el-select v-model="editingUser.project_id" clearable style="width: 100%" placeholder="请选择项目（选填）">
+          <el-select v-model="editingUser.project_ids" multiple clearable collapse-tags collapse-tags-tooltip style="width: 100%" placeholder="请选择项目（可多选）">
             <el-option v-for="p in projectList" :key="p.id" :label="p.name" :value="p.id" />
           </el-select>
         </el-form-item>
@@ -116,7 +289,7 @@
     <el-dialog v-model="resetPwdVisible" title="重置密码" width="400px" class="styled-dialog">
       <el-form label-width="80px">
         <el-form-item label="用户">
-          <span>{{ resetPwdUser.real_name }}（{{ resetPwdUser.username }}）</span>
+          <span>{{ resetPwdUser.real_name }}（{{ resetPwdUser.phone || '无手机号' }}）</span>
         </el-form-item>
         <el-form-item label="新密码" required>
           <el-input v-model="resetPwdValue" type="password" show-password placeholder="请输入新密码（至少6位）" />
@@ -146,6 +319,22 @@
         <el-button type="primary" @click="onSaveProject" :loading="savingProject">保存</el-button>
       </template>
     </el-dialog>
+
+    <!-- 修改密码弹窗 -->
+    <el-dialog v-model="changeMyPwdVisible" title="修改密码" width="400px" class="styled-dialog">
+      <el-form label-width="80px">
+        <el-form-item label="新密码" required>
+          <el-input v-model="changeMyPwdValue" type="password" show-password placeholder="至少8位，包含字母和数字" />
+        </el-form-item>
+        <el-form-item label="确认密码" required>
+          <el-input v-model="changeMyPwdConfirm" type="password" show-password placeholder="再次输入新密码" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="changeMyPwdVisible = false">取消</el-button>
+        <el-button type="primary" @click="onChangeMyPwd" :loading="changingMyPwd">确认修改</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -154,6 +343,9 @@ import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getUsers, createUser, updateUser, deleteUser } from '../../api/pc'
 import { getAllProjects, createProject, updateProject, deleteProject } from '../../api/pc'
+import { getBackupStatus, listBackups, createBackup, restoreBackup, deleteBackup as deleteBackupApi } from '../../api/backup'
+import { changePassword } from '../../api/auth'
+import { getApiKeys, updateApiKey } from '../../api/settings'
 
 const activeTab = ref('users')
 
@@ -163,13 +355,13 @@ const userLoading = ref(false)
 const userSearch = ref('')
 const userDialogVisible = ref(false)
 const savingUser = ref(false)
-const editingUser = ref({ username: '', password: '', real_name: '', role: 'inspector' })
+const editingUser = ref({ username: '', password: '', real_name: '', role: 'inspector', project_ids: [] })
 
 const filteredUsers = computed(() => {
   if (!userSearch.value) return users.value
   const q = userSearch.value.toLowerCase()
   return users.value.filter(u =>
-    u.username.toLowerCase().includes(q) || u.real_name.toLowerCase().includes(q) || (u.phone || '').includes(q)
+    u.real_name.toLowerCase().includes(q) || (u.phone || '').includes(q)
   )
 })
 
@@ -187,26 +379,27 @@ const fetchUsers = async () => {
 
 const openUserDialog = (user = null) => {
   if (user) {
-    editingUser.value = { ...user, password: '' }
+    editingUser.value = { ...user, password: '', project_ids: user.project_ids || [] }
   } else {
-    editingUser.value = { username: '', password: '', phone: '', real_name: '', role: 'inspector', project_id: null }
+    editingUser.value = { username: '', password: '', phone: '', real_name: '', role: 'inspector', project_ids: [] }
   }
   userDialogVisible.value = true
 }
 
 const onSaveUser = async () => {
   const u = editingUser.value
-  if (!u.username || !u.real_name) { ElMessage.warning('请填写必填项'); return }
+  if (!u.real_name) { ElMessage.warning('请填写必填项'); return }
   savingUser.value = true
   try {
     if (u.id) {
-      const data = { real_name: u.real_name, role: u.role, phone: u.phone || null, project_id: u.project_id }
+      const data = { real_name: u.real_name, role: u.role, phone: u.phone || null, project_ids: u.project_ids || [] }
       if (u.password) data.password = u.password
       await updateUser(u.id, data)
       ElMessage.success('用户更新成功')
     } else {
       if (!u.password) { ElMessage.warning('请输入密码'); savingUser.value = false; return }
-      await createUser({ username: u.username, password: u.password, real_name: u.real_name, role: u.role, phone: u.phone || null, project_id: u.project_id })
+      const generatedUsername = u.phone ? 'u_' + u.phone.slice(-4) + '_' + Math.floor(100 + Math.random() * 900) : 'u_' + Date.now()
+      await createUser({ username: generatedUsername, password: u.password, real_name: u.real_name, role: u.role, phone: u.phone || null, project_ids: u.project_ids || [] })
       ElMessage.success('用户创建成功')
     }
     userDialogVisible.value = false
@@ -266,6 +459,7 @@ const onResetPwd = async () => {
 
 const roleLabel = (r) => ({ admin: '管理员', inspector: '检查员', site_supervisor: '阵地督导', field_supervisor: '驻场经理', project_staff: '项目人员' }[r] || r)
 const roleTagType = (r) => ({ admin: 'danger', inspector: '', site_supervisor: 'warning', field_supervisor: 'warning', project_staff: 'info' }[r] || '')
+const roleKtClass = (r) => ({ admin: 'kt-blue', inspector: 'kt-teal', site_supervisor: 'kt-warn', field_supervisor: 'kt-teal', project_staff: 'kt-muted' }[r] || 'kt-muted')
 
 // ==================== 项目管理 ====================
 const projectList = ref([])
@@ -333,97 +527,577 @@ const onDeleteProject = async (project) => {
 
 const formatDate = (iso) => iso ? iso.slice(0, 19).replace('T', ' ') : '-'
 
+// ==================== 数据备份 ====================
+const backupStatus = ref({})
+const backupList = ref([])
+const backupLoading = ref(false)
+const backupTypeFilter = ref('')
+const creatingBackup = ref(false)
+
+const backupTypeLabel = (t) => ({ full: '完整备份', daily: '每日DB', hourly: '每小时DB', pre_restore: '恢复前' }[t] || t)
+const backupTypeTag = (t) => ({ full: '', daily: 'success', hourly: 'warning', pre_restore: 'info' }[t] || '')
+const backupTypeKtClass = (t) => ({ full: 'kt-teal', daily: 'kt-blue', hourly: 'kt-muted', pre_restore: 'kt-muted' }[t] || 'kt-muted')
+
+const fetchBackupStatus = async () => {
+  try {
+    backupStatus.value = await getBackupStatus()
+  } catch (e) { /* silent */ }
+}
+
+const fetchBackupList = async () => {
+  backupLoading.value = true
+  try {
+    const res = await listBackups({ type: backupTypeFilter.value || undefined })
+    backupList.value = res.items || []
+  } catch (e) {
+    ElMessage.error('获取备份列表失败')
+  } finally {
+    backupLoading.value = false
+  }
+}
+
+const onCreateBackup = async (type) => {
+  creatingBackup.value = true
+  try {
+    const res = await createBackup({ type })
+    ElMessage.success(res.message || '备份创建成功')
+    fetchBackupStatus()
+    fetchBackupList()
+  } catch (e) {
+    ElMessage.error(e.response?.data?.detail || '创建备份失败')
+  } finally {
+    creatingBackup.value = false
+  }
+}
+
+const onRestoreBackup = async (row) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要从「${row.filename}」恢复？此操作将覆盖当前数据。系统会先自动创建恢复前备份。`,
+      '确认恢复',
+      { type: 'warning', confirmButtonText: '确认恢复', cancelButtonText: '取消' }
+    )
+    const res = await restoreBackup({ filename: row.filename, backup_type: row.type })
+    ElMessage.success(res.message || '恢复成功')
+    fetchBackupStatus()
+    fetchBackupList()
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.error(e.response?.data?.detail || '恢复失败')
+  }
+}
+
+const onDeleteBackup = async (row) => {
+  try {
+    await ElMessageBox.confirm(`确定删除备份「${row.filename}」？`, '确认', { type: 'warning' })
+    await deleteBackupApi(row.filename, row.type)
+    ElMessage.success('删除成功')
+    fetchBackupStatus()
+    fetchBackupList()
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.error(e.response?.data?.detail || '删除失败')
+  }
+}
+
+// ==================== 修改密码（自助） ====================
+const changeMyPwdVisible = ref(false)
+const changeMyPwdValue = ref('')
+const changeMyPwdConfirm = ref('')
+const changingMyPwd = ref(false)
+
+const openChangeMyPwdDialog = () => {
+  changeMyPwdValue.value = ''
+  changeMyPwdConfirm.value = ''
+  changeMyPwdVisible.value = true
+}
+
+const onChangeMyPwd = async () => {
+  if (!changeMyPwdValue.value || changeMyPwdValue.value.length < 8) {
+    ElMessage.warning('密码长度不能少于8位')
+    return
+  }
+  if (!/[a-zA-Z]/.test(changeMyPwdValue.value) || !/\d/.test(changeMyPwdValue.value)) {
+    ElMessage.warning('密码需包含字母和数字')
+    return
+  }
+  if (changeMyPwdValue.value !== changeMyPwdConfirm.value) {
+    ElMessage.warning('两次输入的密码不一致')
+    return
+  }
+  changingMyPwd.value = true
+  try {
+    await changePassword({ new_password: changeMyPwdValue.value })
+    ElMessage.success('密码修改成功')
+    changeMyPwdVisible.value = false
+  } catch (e) {
+    ElMessage.error(e.response?.data?.detail || '修改失败')
+  } finally {
+    changingMyPwd.value = false
+  }
+}
+
 onMounted(() => {
   fetchUsers()
   fetchProjects()
+  fetchBackupStatus()
+  fetchBackupList()
+  fetchApiKeys()
 })
+
+// ==================== AI 模型配置 ====================
+const apiKeys = ref([])
+const apiKeysLoading = ref(false)
+const apiKeyDialogVisible = ref(false)
+const editingApiKey = ref({})
+const newApiKeyValue = ref('')
+const savingApiKey = ref(false)
+
+const fetchApiKeys = async () => {
+  apiKeysLoading.value = true
+  try {
+    const res = await getApiKeys()
+    apiKeys.value = res.keys || []
+  } catch (e) {
+    ElMessage.error('获取 API 密钥失败')
+  } finally {
+    apiKeysLoading.value = false
+  }
+}
+
+const openApiKeyDialog = (row) => {
+  editingApiKey.value = { ...row }
+  newApiKeyValue.value = ''
+  apiKeyDialogVisible.value = true
+}
+
+const onSaveApiKey = async () => {
+  if (!newApiKeyValue.value || newApiKeyValue.value.length < 4) {
+    ElMessage.warning('请输入有效的 API 密钥')
+    return
+  }
+  savingApiKey.value = true
+  try {
+    await updateApiKey({
+      key_name: editingApiKey.value.name,
+      new_value: newApiKeyValue.value
+    })
+    ElMessage.success('API 密钥更新成功，已立即生效')
+    apiKeyDialogVisible.value = false
+    fetchApiKeys()
+  } catch (e) {
+    ElMessage.error(e.response?.data?.detail || '更新失败')
+  } finally {
+    savingApiKey.value = false
+  }
+}
 </script>
 
 <style scoped>
-.pc-settings {
+/* ==================== Page Container ==================== */
+.settings-page {
   max-width: 1400px;
+  padding-bottom: 40px;
 }
 
-/* ===== Tabs ===== */
-.styled-tabs :deep(.el-tabs__header) {
-  margin-bottom: 16px;
-}
-
-.styled-tabs :deep(.el-tabs__item) {
-  font-size: 15px;
-  font-weight: 500;
-}
-
-.styled-tabs :deep(.el-tabs__active-bar) {
-  background: #2563eb;
-  height: 3px;
-  border-radius: 2px;
-}
-
-.styled-tabs :deep(.el-tabs__item.is-active) {
-  color: #2563eb;
-  font-weight: 600;
-}
-
-/* ===== Content Card ===== */
-.content-card {
-  border-radius: 10px;
-}
-
-.card-toolbar {
+/* ==================== Page Header (prototype .phdr) ==================== */
+.phdr {
   display: flex;
+  align-items: flex-end;
   justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.phdr h1 {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--ink-900);
+  letter-spacing: -0.4px;
+  margin: 0;
+}
+
+.phdr-sub {
+  font-size: 13px;
+  color: var(--ink-400);
+  margin-top: 3px;
+}
+
+.phdr-acts {
+  display: flex;
+  gap: 8px;
+}
+
+/* ==================== Settings Tabs (prototype .set-tabs) ==================== */
+.set-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 18px;
+  border-bottom: 2px solid var(--ink-100);
+}
+
+.set-tab {
+  padding: 8px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-400);
+  cursor: pointer;
+  border: none;
+  background: none;
+  font-family: var(--sans);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: all 0.12s;
+}
+
+.set-tab:hover {
+  color: var(--ink-800);
+}
+
+.set-tab.on {
+  color: var(--blue);
+  border-bottom-color: var(--blue);
+}
+
+/* ==================== Panel toggle ==================== */
+.set-panel {
+  display: none;
+}
+
+.set-panel.on {
+  display: block;
+  animation: pgIn 0.25s var(--ease);
+}
+
+@keyframes pgIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ==================== Buttons (prototype .btn) ==================== */
+.btn {
+  display: inline-flex;
   align-items: center;
-  margin-bottom: 16px;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: var(--r);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.12s var(--ease);
+  border: 1px solid var(--ink-100);
+  background: var(--bg-card);
+  color: var(--ink-800);
+  font-family: var(--sans);
 }
 
-.add-btn {
-  background: #2563eb;
-  border-color: #2563eb;
-  border-radius: 6px;
-  font-weight: 500;
+.btn:hover {
+  background: var(--bg-muted);
+  border-color: var(--ink-200);
 }
 
-.add-btn:hover {
+.btn svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.8;
+}
+
+.btn-primary {
+  background: var(--blue);
+  color: #fff;
+  border-color: var(--blue);
+}
+
+.btn-primary:hover {
   background: #1d4ed8;
   border-color: #1d4ed8;
+  color: #fff;
 }
 
-/* ===== Table ===== */
-.styled-table {
-  --el-table-border-color: #e5e7eb;
-  --el-table-header-bg-color: #f9fafb;
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
-.styled-table :deep(th) {
+/* ==================== Input (prototype .f-input) ==================== */
+.f-input {
+  padding: 7px 12px;
+  border-radius: var(--r);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--ink-800);
+  border: 1px solid var(--ink-100);
+  background: var(--bg-card);
+  font-family: var(--sans);
+  transition: all 0.12s;
+  min-width: 180px;
+  outline: none;
+}
+
+.f-input::placeholder {
+  color: var(--ink-400);
+}
+
+.f-input:hover {
+  border-color: var(--ink-200);
+}
+
+.f-input:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+/* ==================== Card (prototype .card) ==================== */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--ink-100);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+
+/* ==================== Table (prototype .tbl) ==================== */
+.tbl {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.tbl th {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-400);
+  letter-spacing: 0.3px;
+  text-align: center;
+  padding: 10px;
+  background: var(--bg-muted);
+  border-bottom: 1px solid var(--ink-100);
+}
+
+.tbl th:first-child {
+  text-align: left;
+  padding-left: 20px;
+}
+
+.tbl td {
+  font-size: 14px;
+  font-weight: 500;
+  text-align: center;
+  padding: 12px 10px;
+  border-bottom: 1px solid var(--ink-100);
+  color: var(--ink-600);
+}
+
+.tbl td:first-child {
+  text-align: left;
+  padding-left: 20px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-400);
+}
+
+.tbl tbody tr {
+  cursor: pointer;
+  transition: background 0.08s;
+}
+
+.tbl tbody tr:hover {
+  background: var(--bg);
+}
+
+/* ==================== Tags (prototype .kt) ==================== */
+.kt {
+  font-size: 11px;
+  font-family: var(--mono);
   font-weight: 600;
-  color: #5c6477;
+  padding: 2px 7px;
+  border-radius: 3px;
+}
+
+.kt-blue {
+  background: var(--blue-bg);
+  color: var(--blue);
+}
+
+.kt-teal {
+  background: var(--teal-50);
+  color: var(--teal-700);
+}
+
+.kt-warn {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+.kt-err {
+  background: var(--err-bg);
+  color: var(--err);
+}
+
+.kt-muted {
+  background: var(--bg-muted);
+  color: var(--ink-600);
+}
+
+/* ==================== Status pills (prototype .st) ==================== */
+.st {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.st-done {
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+
+.st-pending {
+  background: var(--bg-muted);
+  color: var(--ink-400);
+}
+
+/* ==================== Action buttons (prototype .act) ==================== */
+.act {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--blue);
+  cursor: pointer;
+  border: none;
+  background: none;
+  font-family: var(--sans);
+  padding: 4px 8px;
+  border-radius: var(--r-sm);
+  transition: background 0.1s;
+}
+
+.act:hover {
+  background: var(--blue-bg);
+}
+
+.act + .act {
+  margin-left: 2px;
+}
+
+.act-warn {
+  color: var(--warn);
+}
+
+.act-warn:hover {
+  background: var(--warn-bg);
+}
+
+.act-err {
+  color: var(--err);
+}
+
+.act-err:hover {
+  background: var(--err-bg);
+}
+
+.act-ok {
+  color: var(--ok);
+}
+
+.act-ok:hover {
+  background: var(--ok-bg);
+}
+
+/* ==================== Filters bar (prototype .filters) ==================== */
+.filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ==================== Radio group (prototype .radio-group) ==================== */
+.radio-group {
+  display: flex;
+  gap: 2px;
+  background: var(--bg-muted);
+  border-radius: var(--r);
+  padding: 3px;
+}
+
+.radio-btn {
+  padding: 5px 12px;
+  border-radius: var(--r-sm);
   font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-400);
+  cursor: pointer;
+  border: none;
+  background: none;
+  font-family: var(--sans);
+  transition: all 0.12s;
 }
 
-.styled-table :deep(td) {
-  font-size: 13px;
-  color: #1a1d26;
+.radio-btn:hover {
+  color: var(--ink-600);
 }
 
-.styled-table :deep(.el-table__row:hover > td) {
-  background-color: #f5f7fa !important;
+.radio-btn.on {
+  background: var(--bg-card);
+  color: var(--blue);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 
-/* ===== Dialog ===== */
+/* ==================== Backup grid (prototype .bk-grid) ==================== */
+.bk-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.bk-item {
+  background: var(--bg-muted);
+  border-radius: var(--r);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bk-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-400);
+}
+
+.bk-val {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink-800);
+}
+
+.bk-status {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ok);
+}
+
+/* ==================== Dialog ==================== */
 :deep(.styled-dialog .el-dialog) {
-  border-radius: 10px;
+  border-radius: var(--r-lg);
   overflow: hidden;
 }
 
 :deep(.styled-dialog .el-dialog__header) {
-  background: #f9fafb;
+  background: var(--bg-muted);
   padding: 16px 20px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--ink-200);
 }
 
 :deep(.styled-dialog .el-dialog__title) {
   font-weight: 600;
-  color: #1a1d26;
+  color: var(--ink-900);
+}
+
+/* ==================== Responsive ==================== */
+@media (max-width: 1200px) {
+  .bk-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 </style>

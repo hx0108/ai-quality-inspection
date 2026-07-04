@@ -41,6 +41,13 @@ async def lifespan(app: FastAPI):
     # 启动定时任务：每日凌晨2点收集AI评估指标
     _start_scheduler()
 
+    # 启动时立即生成整改到期/逾期提醒通知
+    try:
+        _scheduled_rectification_reminders()
+        logger.info("启动时整改提醒已执行")
+    except Exception as e:
+        logger.error(f"启动时整改提醒失败: {e}")
+
     yield
 
     # ===== 关机逻辑：释放资源 =====
@@ -130,8 +137,19 @@ def _start_scheduler():
             max_instances=1,
         )
 
+        # 每天凌晨1点：整改到期提醒
+        _scheduler_instance.add_job(
+            func=_scheduled_rectification_reminders,
+            trigger="cron",
+            hour=10,
+            minute=0,
+            id="daily_rectification_reminders",
+            replace_existing=True,
+            max_instances=1,
+        )
+
         _scheduler_instance.start()
-        logger.info("APScheduler 已启动: 02:00指标收集 | 03:00技能编译 | 04:00记忆策展 | 周一05:00自我改进")
+        logger.info("APScheduler 已启动: 10:00整改提醒 | 02:00指标收集 | 03:00技能编译 | 04:00记忆策展 | 周一05:00自我改进")
     except ImportError:
         logger.warning("APScheduler 未安装，定时指标收集已跳过。安装命令: pip install apscheduler")
     except Exception as e:
@@ -139,6 +157,98 @@ def _start_scheduler():
 
 
 # ==================== 定时任务包装函数 ====================
+
+def _scheduled_rectification_reminders():
+    """定时任务：按项目汇总，发送到期/逾期提醒（每项目一条通知，直接写SQLite避免异步丢失）"""
+    from datetime import datetime, timedelta
+    from collections import defaultdict, Counter
+    import sqlite3, random
+
+    db_path = str(settings.DATA_DIR / "inspection.db")
+    try:
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
+
+        today = datetime.now()
+        today_str = today.strftime("%Y-%m-%d")
+        exp5 = (today + timedelta(days=5)).strftime("%Y-%m-%d")
+
+        # 两种提醒：即将到期（精确匹配5天后）和已逾期（所有deadline < 今天的）
+        reminder_configs = [
+            ("expiring", "即将到期",
+             "SELECT r.rectification_id, r.task_id, r.reminder_sent, i.module_name FROM rectifications r LEFT JOIN issues i ON r.issue_id = i.issue_id WHERE r.status = 'pending' AND r.deadline = ?",
+             (exp5,)),
+            ("expired", "已逾期",
+             "SELECT r.rectification_id, r.task_id, r.reminder_sent, i.module_name FROM rectifications r LEFT JOIN issues i ON r.issue_id = i.issue_id WHERE r.status = 'pending' AND r.deadline < ?",
+             (today_str,)),
+        ]
+
+        for reminder_type, label, sql, params in reminder_configs:
+            c.execute(sql, params)
+            rects = [r for r in c.fetchall() if r["reminder_sent"] != reminder_type]
+            if not rects:
+                continue
+
+            by_task = defaultdict(list)
+            for r in rects:
+                by_task[r["task_id"]].append(r)
+
+            for task_id, task_rects in by_task.items():
+                c.execute("""
+                    SELECT p.name, t.project_id FROM inspection_tasks t
+                    JOIN projects p ON t.project_id = p.id WHERE t.task_id = ?
+                """, (task_id,))
+                task_info = c.fetchone()
+                if not task_info:
+                    continue
+                project_name = task_info["name"]
+                project_id = task_info["project_id"]
+
+                module_counts = Counter()
+                for r in task_rects:
+                    module_counts[r["module_name"] or "未知"] += 1
+                total_count = sum(module_counts.values())
+                module_detail = "、".join(f"{m}{cnt}项" for m, cnt in module_counts.items())
+
+                if reminder_type == "expiring":
+                    title = f"整改即将到期 - {project_name}"
+                    content = f"项目「{project_name}」有{total_count}条整改将于5天后到期，涉及：{module_detail}。请尽快督促整改。"
+                else:
+                    title = f"整改已逾期 - {project_name}"
+                    content = f"项目「{project_name}」有{total_count}条整改已逾期，涉及：{module_detail}。请立即处理。"
+
+                recipients = set()
+                c.execute("""
+                    SELECT u.id, u.username FROM users u
+                    JOIN user_projects up ON u.id = up.user_id
+                    WHERE up.project_id = ? AND u.role = 'field_supervisor' AND u.is_active = 1
+                """, (project_id,))
+                for r in c.fetchall():
+                    recipients.add((r["id"], r["username"]))
+                c.execute("SELECT id, username FROM users WHERE role = 'admin' AND is_active = 1")
+                for r in c.fetchall():
+                    recipients.add((r["id"], r["username"]))
+
+                now = datetime.now().isoformat()
+                for user_id, username in recipients:
+                    nid = f"NTF-{today.strftime('%Y%m%d')}-{random.randint(100000, 999999)}"
+                    c.execute(
+                        "INSERT INTO notifications (notification_id, user_id, username, title, content, notify_type, ref_type, ref_id, is_read, created_at) VALUES (?,?,?,?,?,?,?,?,0,?)",
+                        (nid, user_id, username, title, content, "rectification_reminder", "task", task_id, now)
+                    )
+
+            for r in rects:
+                c.execute("UPDATE rectifications SET reminder_sent = ? WHERE rectification_id = ?", (reminder_type, r["rectification_id"]))
+
+            conn.commit()
+            if rects:
+                logger.info(f"[整改提醒] {len(by_task)}个项目{label}, 共{len(rects)}条记录")
+
+        conn.close()
+    except Exception as e:
+        logger.error(f"[整改提醒] 失败: {e}")
+
 
 def _scheduled_rule_compilation():
     """定时任务：技能编译 — 从人工修正案例中抽象评分规则"""
@@ -305,7 +415,7 @@ app.add_middleware(
 
 
 # ==================== 路由注册 ====================
-from api import auth, tasks, inspection, scoring, report, users, projects, analysis, rectification, llm_stats, quality_api, orchestrator, knowledge_base_api, notification, prompts, events, guide, geocode
+from api import auth, tasks, inspection, scoring, report, users, projects, analysis, rectification, llm_stats, quality_api, orchestrator, knowledge_base_api, notification, prompts, events, guide, geocode, ai_metrics, backup, settings_api
 
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["认证"])
 app.include_router(users.router, prefix="/api/v1/users", tags=["用户管理"])
@@ -322,9 +432,16 @@ app.include_router(orchestrator.router, prefix="/api/v1/orchestrator", tags=["Or
 app.include_router(knowledge_base_api.router, prefix="/api/v1/knowledge", tags=["问题知识库"])
 app.include_router(notification.router, prefix="/api/v1/notifications", tags=["通知"])
 app.include_router(prompts.router,      prefix="/api/v1/admin",        tags=["Prompt管理"])
+app.include_router(settings_api.router, prefix="/api/v1/admin",        tags=["AI模型配置"])
 app.include_router(events.router,       prefix="/api/v1/events",       tags=["SSE推送"])
 app.include_router(guide.router,        prefix="/api/v1/guide",        tags=["检查引导"])
 app.include_router(geocode.router,     prefix="/api/v1/utils",        tags=["工具"])
+app.include_router(ai_metrics.router,  prefix="/api/v1/ai-metrics",   tags=["AI效果评估"])
+app.include_router(backup.router,      prefix="/api/v1/backup",       tags=["数据备份"])
+
+# ==================== 自动备份调度器 ====================
+from api.backup import start_backup_scheduler
+start_backup_scheduler()
 
 
 # ==================== 健康检查 ====================

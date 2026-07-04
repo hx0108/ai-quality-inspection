@@ -132,6 +132,45 @@ class TestRegisterValidation:
         assert "access_token" in data
         assert data["user"]["role"] == "project_staff"
 
+    def test_register_multiple_projects_keeps_first_as_default(self, client, db_session, test_project):
+        """注册选择多个项目时应绑定全部项目，并将首选项目作为默认项目。"""
+        from models.models import Project, User, UserProject
+
+        second_project = Project(name="测试项目二", code="PRJ-TEST-002")
+        db_session.add(second_project)
+        db_session.commit()
+        db_session.refresh(second_project)
+
+        resp = client.post("/api/v1/auth/register", json={
+            "phone": "13800003333",
+            "password": "testPass123",
+            "real_name": "多项目用户",
+            "project_id": second_project.id,
+            "project_name": second_project.name,
+            "project_ids": [second_project.id, test_project.id],
+            "project_names": [second_project.name, test_project.name]
+        })
+
+        assert resp.status_code == 200
+        data = resp.json()["user"]
+        assert data["project_id"] == second_project.id
+        assert data["project_name"] == second_project.name
+        assert data["projects"] == [
+            {"id": second_project.id, "name": second_project.name},
+            {"id": test_project.id, "name": test_project.name}
+        ]
+
+        user = db_session.query(User).filter(User.phone == "13800003333").one()
+        linked_ids = [
+            row.project_id
+            for row in db_session.query(UserProject)
+            .filter(UserProject.user_id == user.id)
+            .order_by(UserProject.id)
+            .all()
+        ]
+        assert user.project_id == second_project.id
+        assert linked_ids == [second_project.id, test_project.id]
+
 
 class TestTokenAndAuth:
     """Token 和权限控制测试"""

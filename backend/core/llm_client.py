@@ -1436,7 +1436,8 @@ class DeepSeekClient:
         self,
         module_name: str,
         module_score: float,
-        items: list
+        items: list,
+        memory_context: str = ""
     ) -> dict:
         """
         分析单个模块的检查情况
@@ -1445,6 +1446,7 @@ class DeepSeekClient:
             module_name: 模块名称
             module_score: 模块得分（百分制）
             items: 检查项列表（包含分数和问题）
+            memory_context: 该项目历史记忆上下文（可选，来自长期记忆）
 
         Returns:
             模块分析结果
@@ -1452,12 +1454,23 @@ class DeepSeekClient:
         if not self.api_key:
             return {"error": "DEEPSEEK_API_KEY 未配置"}
 
+        # 历史记忆段落（仅在有记忆时注入，无记忆则保持原行为，零风险）
+        memory_section = ""
+        if memory_context and memory_context.strip():
+            memory_section = f"""
+
+【该项目历史检查记忆】（参考历史模式，识别反复出现的问题和趋势）
+{memory_context}
+
+请在分析中结合历史记忆：若发现反复出现的问题（recurring_issue），应在 main_issues 中明确标注"历史重复问题"并强调；若发现改善趋势，也应在评价中体现。
+"""
+
         prompt = f"""你是物业品质检查分析专家。请根据以下模块的检查评分数据，对该模块的物业品质管理情况进行专业分析。
 
 【模块信息】
 模块名称：{module_name}
 模块得分（百分制）：{module_score:.2f}分
-检查项数量：{len(items)}项
+检查项数量：{len(items)}项{memory_section}
 
 【检查项详情（含评分、权重、检查标准、问题记录）】
 {json.dumps(items, ensure_ascii=False, indent=2)}
@@ -1694,6 +1707,12 @@ class DeepSeekClient:
                 judgment = "基本持平"
             matrix_text += f"| {m.get('module_name','')} | {m.get('weight',0)*100:.0f}% | {m.get('score_a',0):.2f} | {m.get('score_b',0):.2f} | {diff:+.2f} | {judgment} |\n"
 
+        # 历史记忆段落（仅在有记忆时注入，零风险）
+        memory_context = comparison_data.get("memory_context", "")
+        memory_section = ""
+        if memory_context and memory_context.strip():
+            memory_section = f"\n\n【相关项目的历史检查记忆】（参考历史模式、反复问题和改善趋势，使分析具备纵向视角）\n{memory_context}\n"
+
         # 模式特定提示
         if mode == "cross_time":
             mode_desc = "跨时段趋势对比"
@@ -1721,7 +1740,7 @@ class DeepSeekClient:
 {matrix_text}
 
 【模块分析详情】
-{_json.dumps(module_analyses, ensure_ascii=False)[:2000]}
+{_json.dumps(module_analyses, ensure_ascii=False)[:2000]}{memory_section}
 
 【分析要求】
 请按以下框架进行深度分析：
@@ -1806,8 +1825,85 @@ class DeepSeekClient:
         # 降级返回
         logger.error(f"所有重试失败: {last_error}")
         return {
-            "executive_summary": f"AI分析暂时不可用。{label_a}总分 {summary_a.get('total_score',0):.2f}，{label_b}总分 {summary_b.get('total_score',0):.2f}。",
+            "executive_summary": "AI分析暂时不可用",
             "overall_verdict": "AI分析降级模式",
             "error": str(last_error),
-            "full_report_markdown": f"# 综合分析报告（AI降级模式）\n\n{label_a}总分: {summary_a.get('total_score',0):.2f}\n{label_b}总分: {summary_b.get('total_score',0):.2f}\n\n请稍后重试获取完整AI分析。"
+            "full_report_markdown": ""
         }
+
+    async def generate_diagnosis_suggestion(self, diagnosis: dict) -> dict:
+        """
+        基于诊断结果生成 LLM 根因解释 + 可执行改进建议（P2）。
+        失败时返回确定性降级结果（不影响主流程）。
+        """
+        if not self.api_key:
+            return {"root_cause": diagnosis.get("root_cause", ""), "suggestion": "", "action_type": "", "expected_impact": ""}
+
+        import json as _json
+        module = diagnosis.get("module_name", "")
+        pattern = diagnosis.get("pattern", "")
+        problem = diagnosis.get("problem", "")
+        hotspots = diagnosis.get("evidence", {}).get("hotspots", [])
+        metrics = diagnosis.get("evidence", {}).get("module_metrics", {})
+
+        hotspot_text = "\n".join([
+            f"- {h.get('item_name') or h.get('item_id')}: 被人工修改{h.get('edit_count')}次, AI置信度{h.get('avg_confidence')}"
+            for h in hotspots[:5]
+        ]) or "(暂无足够修改样本)"
+
+        prompt = f"""你是AI评分系统的诊断专家。基于以下确定性诊断数据，给出根因分析和一条最优先的改进建议。
+
+【异常模块】{module}
+【偏差模式】{pattern}
+【问题】{problem}
+【模块指标】一致性率{metrics.get('consistency_rate')}%, 编辑率{metrics.get('edit_rate')}%, 平均置信度{metrics.get('avg_confidence')}
+【修改热点检查项】
+{hotspot_text}
+
+请输出合法JSON(不要markdown代码块)，格式：
+{{
+  "root_cause": "<一句话根因: AI评分在哪方面缺失或偏差, 引用具体检查项>",
+  "action_type": "add_rule|adjust_threshold|refine_prompt|add_edge_case",
+  "suggestion": "<具体可执行建议: 补充什么案例/调什么阈值/改什么prompt>",
+  "expected_impact": "<预计提升什么指标, 幅度多少>"
+}}
+
+action_type 选择规则:
+- 漏检型/过严型 -> add_rule
+- 不确定型/低置信度 -> adjust_threshold 或 add_edge_case
+- 盲目自信型 -> refine_prompt"""
+
+        try:
+            client = await self.get_client()
+            start = _time.time()
+            response = await client.post(
+                f"{self.base_url}/chat/completions",
+                headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
+                json={
+                    "model": getattr(settings, 'DEEPSEEK_REPORT_MODEL', 'deepseek-chat'),
+                    "messages": [
+                        {"role": "system", "content": "你是AI评分系统的诊断专家，擅长从评分数据中追溯根因并给出可落地的改进建议。直接输出合法JSON。"},
+                        {"role": "user", "content": prompt},
+                    ],
+                    "temperature": 0.4,
+                    "max_tokens": 800,
+                    "response_format": {"type": "json_object"},
+                },
+            )
+            if response.status_code != 200:
+                raise Exception(f"API失败:{response.status_code}")
+            result = response.json()
+            _log_llm_usage(getattr(settings, 'DEEPSEEK_REPORT_MODEL', 'deepseek-chat'), "diagnosis", result, int((_time.time() - start) * 1000))
+            content = result["choices"][0]["message"]["content"].strip()
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0].strip()
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0].strip()
+            parsed = _json.loads(content)
+            valid = {"add_rule", "adjust_threshold", "refine_prompt", "add_edge_case"}
+            if parsed.get("action_type") not in valid:
+                parsed["action_type"] = "add_rule"
+            return parsed
+        except Exception as e:
+            logger.warning(f"诊断建议生成失败(降级): {e}")
+            return {"root_cause": diagnosis.get("root_cause", ""), "suggestion": "", "action_type": "", "expected_impact": ""}

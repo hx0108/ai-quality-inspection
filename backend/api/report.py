@@ -82,6 +82,32 @@ def run_report_generation_sync(task_id: str):
         report_progress[task_id]["status"] = "completed"
         _persist_report_progress(task_id)
         logger.info(f"报告生成完成: {task_id}")
+
+        # 通知管理员报告已生成
+        try:
+            from api.notification import send_notification
+            task = SessionLocal().query(InspectionTask).filter(InspectionTask.task_id == task_id).first()
+            project_name = ""
+            if task:
+                from models.models import Project
+                proj = SessionLocal().query(Project).filter(Project.id == task.project_id).first()
+                project_name = proj.name if proj else ""
+            db_notif = SessionLocal()
+            admins = db_notif.query(User).filter(User.role == 'admin', User.is_active == True).all()
+            for admin in admins:
+                send_notification(
+                    user_id=admin.id,
+                    username=admin.username,
+                    title=f"报告已生成 - {project_name}",
+                    content=f"项目「{project_name}」的检查报告已生成完成，请查阅。",
+                    notify_type="report_ready",
+                    ref_type="task",
+                    ref_id=task_id,
+                    async_send=True
+                )
+            db_notif.close()
+        except Exception as ne:
+            logger.warning(f"报告完成通知发送失败: {ne}")
     except Exception as e:
         logger.error(f"报告生成失败: {e}")
         import traceback
@@ -716,4 +742,31 @@ async def get_report_by_id(
         "generated_at": report.generated_at.isoformat() if report.generated_at else None,
         "content": content
     }
+
+
+@router.delete("/{task_id}", summary="删除报告")
+async def delete_report(
+    task_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(check_role(["admin"]))
+):
+    """删除报告及关联文件（仅管理员）"""
+    report = db.query(Report).filter(Report.task_id == task_id).order_by(Report.generated_at.desc()).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="报告不存在")
+
+    report_id = report.report_id
+
+    # 删除磁盘文件
+    if report.file_path and os.path.exists(report.file_path):
+        os.remove(report.file_path)
+    pdf_path = report.file_path.replace('.docx', '.pdf') if report.file_path else ''
+    if pdf_path and os.path.exists(pdf_path):
+        os.remove(pdf_path)
+
+    db.delete(report)
+    db.commit()
+
+    logger.info(f"报告已删除: {report_id} (task={task_id}), by user={current_user.username}")
+    return {"message": "报告已删除", "report_id": report_id}
 

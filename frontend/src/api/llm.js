@@ -19,3 +19,7 @@ export function getLlmModels() {
 export function getLlmCostEstimate(days = 30) {
   return request.get(`/llm-stats/cost-estimate?days=${days}`)
 }
+
+export function getLlmDurationDistribution(days = 30) {
+  return request.get(`/llm-stats/duration-distribution?days=${days}`)
+}

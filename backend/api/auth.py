@@ -85,8 +85,10 @@ class RegisterRequest(BaseModel):
     phone: str
     password: str
     real_name: str
-    project_id: Optional[int] = None  # 前端辅助字段，不作为查找依据
-    project_name: str  # ★ 必填：用户看到并选择的项目名称，唯一权威来源
+    project_id: Optional[int] = None  # 兼容字段：多项目注册时为默认项目
+    project_name: Optional[str] = None  # 兼容字段：多项目注册时为默认项目名称
+    project_ids: Optional[list[int]] = None
+    project_names: Optional[list[str]] = None
 
 
 class TokenResponse(BaseModel):
@@ -238,7 +240,10 @@ async def register(request: Request, data: RegisterRequest, db: Session = Depend
 
     import logging
     logger = logging.getLogger(__name__)
-    logger.warning(f"[注册] 收到请求: phone={data.phone}, project_id={data.project_id}, project_name={data.project_name}")
+    logger.warning(
+        f"[注册] 收到请求: phone={data.phone}, project_id={data.project_id}, "
+        f"project_name={data.project_name}, project_ids={data.project_ids}"
+    )
 
     phone = data.phone.strip()
     real_name = data.real_name.strip()
@@ -263,13 +268,36 @@ async def register(request: Request, data: RegisterRequest, db: Session = Depend
     if existing:
         raise HTTPException(status_code=400, detail="该手机号已注册，请直接登录")
 
-    # ★ 项目归属：project_name 是唯一权威来源（用户看到并选择的就是这个名字）
+    # 项目归属：新客户端提交有序项目列表；旧客户端继续支持单个项目名称。
     from models.models import Project
-    project = db.query(Project).filter(Project.name == data.project_name).first()
-    if not project:
-        raise HTTPException(status_code=400, detail=f"项目「{data.project_name}」不存在，请刷新页面后重试")
-    logger.warning(f"[注册] 按project_name='{data.project_name}'查找项目: id={project.id}, name={project.name}")
+    selected_projects = []
+    if data.project_ids:
+        if len(data.project_ids) != len(set(data.project_ids)):
+            raise HTTPException(status_code=400, detail="所属项目不能重复选择")
+        projects_by_id = {
+            project.id: project
+            for project in db.query(Project).filter(Project.id.in_(data.project_ids)).all()
+        }
+        missing_ids = [pid for pid in data.project_ids if pid not in projects_by_id]
+        if missing_ids:
+            raise HTTPException(status_code=400, detail="选择的所属项目不存在，请刷新页面后重试")
+        selected_projects = [projects_by_id[pid] for pid in data.project_ids]
+        if data.project_names and data.project_names != [p.name for p in selected_projects]:
+            raise HTTPException(status_code=400, detail="项目选择信息已变化，请刷新页面后重试")
+    elif data.project_name:
+        project = db.query(Project).filter(Project.name == data.project_name).first()
+        if not project:
+            raise HTTPException(status_code=400, detail=f"项目「{data.project_name}」不存在，请刷新页面后重试")
+        selected_projects = [project]
+    else:
+        raise HTTPException(status_code=400, detail="请至少选择一个所属项目")
+
+    project = selected_projects[0]
     final_project_id = project.id
+    logger.warning(
+        f"[注册] 项目绑定已校验: default={project.id}/{project.name}, "
+        f"all={[p.id for p in selected_projects]}"
+    )
 
     # 生成用户名：u_手机号后4位_随机3位
     import random
@@ -311,14 +339,11 @@ async def register(request: Request, data: RegisterRequest, db: Session = Depend
         db.commit()
         logger.warning(f"[注册] ★ 已通过 raw SQL 修正 project_id 为 {final_project_id}")
 
-    # 写入 user_projects 多对多表
+    # 写入 user_projects 多对多表，首个项目仍由 users.project_id 提供兼容默认值。
     from models.models import UserProject
-    existing_up = db.query(UserProject).filter(
-        UserProject.user_id == user.id, UserProject.project_id == final_project_id
-    ).first()
-    if not existing_up:
-        db.add(UserProject(user_id=user.id, project_id=final_project_id))
-        db.commit()
+    for selected_project in selected_projects:
+        db.add(UserProject(user_id=user.id, project_id=selected_project.id))
+    db.commit()
 
     # 自动登录：返回 Token
     access_token = create_access_token(
@@ -337,7 +362,7 @@ async def register(request: Request, data: RegisterRequest, db: Session = Depend
             "role": user.role,
             "project_id": final_project_id,
             "project_name": project.name,
-            "projects": [{"id": project.id, "name": project.name}]
+            "projects": [{"id": p.id, "name": p.name} for p in selected_projects]
         }
     )
 

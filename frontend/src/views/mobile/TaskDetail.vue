@@ -249,6 +249,7 @@ import { createRecord } from '../../api/inspection'
 import { getScoringStatus, getModuleScoringStatus } from '../../api/scoring'
 import { runFullPipeline, getPipelineStatus } from '../../api/orchestrator'
 import { useAuthStore } from '../../stores/auth'
+import { usePolling } from '../../composables/usePolling'
 
 const router = useRouter()
 const route = useRoute()
@@ -267,7 +268,14 @@ const startingInspection = ref(false)
 const scoringLoading = ref(false)
 const scoringStatus = ref(null)
 const scoringProgress = ref('')
-let scoringPollingTimer = null
+// 统一轮询管理：自动在卸载/路由离开时清理（修复手势返回泄漏）
+// 回调内含停止条件，scoringStatus 非评分中时停止
+const { start: _startScoringPolling, stop: stopScoringPolling } = usePolling(
+  () => checkScoringStatus().then(() => {
+    if (scoringStatus.value !== 'scoring') stopScoringPolling()
+  }),
+  { interval: 5000, immediate: true }
+)
 const pipelineLoading = ref(false)
 const showPipelineDialog = ref(false)
 const pipelineStep = ref(0)
@@ -483,15 +491,7 @@ const checkScoringStatus = async () => {
 
 // 开始评分状态轮询
 const startScoringPolling = () => {
-  if (scoringPollingTimer) clearInterval(scoringPollingTimer)
-  checkScoringStatus()
-  scoringPollingTimer = setInterval(async () => {
-    await checkScoringStatus()
-    if (scoringStatus.value !== 'scoring') {
-      clearInterval(scoringPollingTimer)
-      scoringPollingTimer = null
-    }
-  }, 5000)
+  _startScoringPolling()
 }
 
 const onBack = () => {
@@ -577,10 +577,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  if (scoringPollingTimer) {
-    clearInterval(scoringPollingTimer)
-    scoringPollingTimer = null
-  }
+  // 定时器清理已由 usePolling 自动处理；这里只关弹窗
   // 使用 Vant API 正确关闭弹窗
   closeToast()
 })

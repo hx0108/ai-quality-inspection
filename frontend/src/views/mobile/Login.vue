@@ -1,298 +1,313 @@
 <template>
   <div class="login-page">
-    <!-- 多层背景 -->
-    <div class="bg-base"></div>
-    <div class="bg-nebula"></div>
-    <div class="bg-stars"></div>
-    <div class="bg-aurora"></div>
-
-    <!-- 宇宙传送门（左侧偏上） -->
-    <div class="portal-wrapper">
-      <div class="portal-ring ring-1"></div>
-      <div class="portal-ring ring-2"></div>
-      <div class="portal-ring ring-3"></div>
-      <div class="portal-ring ring-4"></div>
-      <div class="portal-ring ring-5"></div>
-      <div class="portal-core"></div>
-      <div class="portal-pulse pulse-1"></div>
-      <div class="portal-pulse pulse-2"></div>
-      <!-- 粒子 -->
-      <div class="particle p1"></div>
-      <div class="particle p2"></div>
-      <div class="particle p3"></div>
-      <div class="particle p4"></div>
-      <div class="particle p5"></div>
-      <div class="particle p6"></div>
-      <div class="particle p7"></div>
-      <div class="particle p8"></div>
-      <div class="particle p9"></div>
-      <div class="particle p10"></div>
-      <!-- 光束 -->
-      <div class="light-beam beam-1"></div>
-      <div class="light-beam beam-2"></div>
-      <div class="light-beam beam-3"></div>
-    </div>
-
-    <!-- 漂浮粒子 -->
-    <div class="floating-dots">
-      <div class="dot d1"></div>
-      <div class="dot d2"></div>
-      <div class="dot d3"></div>
-      <div class="dot d4"></div>
-      <div class="dot d5"></div>
-      <div class="dot d6"></div>
-      <div class="dot d7"></div>
-      <div class="dot d8"></div>
-    </div>
-
-    <!-- 底部模糊球 -->
-    <div class="orb orb-left"></div>
-    <div class="orb orb-right"></div>
-
-    <!-- 左上 logo -->
-    <div class="top-logo">
-      <div class="logo-mark">
-        <svg viewBox="0 0 60 60" width="44" height="44">
-          <defs>
-            <linearGradient id="lg1" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" style="stop-color:#818cf8"/>
-              <stop offset="100%" style="stop-color:#c084fc"/>
-            </linearGradient>
-            <linearGradient id="lg2" x1="100%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" style="stop-color:#6366f1"/>
-              <stop offset="100%" style="stop-color:#a78bfa"/>
-            </linearGradient>
-            <filter id="lglow">
-              <feGaussianBlur stdDeviation="2" result="b"/>
-              <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-            </filter>
-          </defs>
-          <!-- 外层六边形 - 顺时针旋转 -->
-          <polygon points="30,4 52,16 52,44 30,56 8,44 8,16"
-                   fill="none" stroke="url(#lg1)" stroke-width="1.2"
-                   stroke-linejoin="round" filter="url(#lglow)">
-            <animateTransform attributeName="transform" type="rotate"
-              from="0 30 30" to="360 30 30" dur="20s" repeatCount="indefinite"/>
-          </polygon>
-          <!-- 内层六边形 - 逆时针旋转 -->
-          <polygon points="30,13 43,21 43,39 30,47 17,39 17,21"
-                   fill="rgba(139,92,246,0.04)" stroke="url(#lg2)" stroke-width="0.8"
-                   stroke-linejoin="round">
-            <animateTransform attributeName="transform" type="rotate"
-              from="360 30 30" to="0 30 30" dur="14s" repeatCount="indefinite"/>
-          </polygon>
-          <!-- 中心呼吸光晕 -->
-          <circle cx="30" cy="30" r="8" fill="rgba(139,92,246,0.06)">
-            <animate attributeName="r" values="6;10;6" dur="3s" repeatCount="indefinite"/>
-            <animate attributeName="opacity" values="0.6;1;0.6" dur="3s" repeatCount="indefinite"/>
-          </circle>
-          <!-- 勾选标记 -->
-          <path d="M23,30 L27.5,34.5 L37,25" fill="none" stroke="url(#lg1)" stroke-width="2.2"
-                stroke-linecap="round" stroke-linejoin="round" filter="url(#lglow)"/>
-          <!-- 轨道粒子1 -->
-          <circle r="2" fill="#c4b5fd" opacity="0.9">
-            <animateMotion dur="8s" repeatCount="indefinite"
-              path="M30,30 m-18,0 a18,18 0 1,0 36,0 a18,18 0 1,0 -36,0"/>
-          </circle>
-          <!-- 轨道粒子2 -->
-          <circle r="1.5" fill="#818cf8" opacity="0.7">
-            <animateMotion dur="12s" repeatCount="indefinite"
-              path="M30,30 m-22,0 a22,22 0 1,0 44,0 a22,22 0 1,0 -44,0"/>
-          </circle>
-          <!-- 轨道粒子3 -->
-          <circle r="1" fill="#e9d5ff" opacity="0.5">
-            <animateMotion dur="6s" repeatCount="indefinite"
-              path="M30,30 m-12,0 a12,12 0 1,1 24,0 a12,12 0 1,1 -24,0"/>
-          </circle>
-        </svg>
-      </div>
-      <div class="logo-text-group">
-        <span class="logo-title">品质检查</span>
-        <span class="logo-subtitle">QUALITY INSPECT</span>
-      </div>
-    </div>
-
-    <!-- 登录卡片 -->
-    <div class="login-card">
-      <!-- 顶部发光线 -->
-      <div class="card-glow-line"></div>
-      <!-- 角落装饰 -->
-      <div class="corner-deco corner-tl"></div>
-      <div class="corner-deco corner-tr"></div>
-      <div class="corner-deco corner-bl"></div>
-      <div class="corner-deco corner-br"></div>
-
-      <!-- 卡片标题 -->
-      <div class="card-header">
-        <div class="title-icon">
-          <svg viewBox="0 0 32 32" width="32" height="32">
-            <defs>
-              <linearGradient id="tg" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" style="stop-color:#818cf8"/>
-                <stop offset="100%" style="stop-color:#a78bfa"/>
-              </linearGradient>
-            </defs>
-            <path d="M16 3 L28 10 L28 18 C28 25 23 30 16 31 C9 30 4 25 4 18 L4 10 Z"
-                  fill="url(#tg)" opacity="0.15" stroke="url(#tg)" stroke-width="1"/>
-            <path d="M12 16 L15 19 L21 13" fill="none" stroke="#c4b5fd" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">
+          <van-icon name="passed" />
         </div>
-        <div class="card-title">欢迎使用智能品质检查系统</div>
-      </div>
-
-      <!-- Tab 切换（下划线风格） -->
-      <div class="tab-bar">
-        <div :class="['tab-item', mode === 'login' && 'tab-active']" @click="mode = 'login'">
-          账号登录
-          <div v-if="mode === 'login'" class="tab-underline"></div>
-        </div>
-        <div :class="['tab-item', mode === 'register' && 'tab-active']" @click="switchToRegister">
-          账号注册
-          <div v-if="mode === 'register'" class="tab-underline"></div>
+        <div>
+          <div class="brand-name">智能品质检查</div>
+          <div class="brand-subtitle">Quality Inspection Platform</div>
         </div>
       </div>
+      <div class="topbar-meta">{{ currentDate }}</div>
+    </header>
 
-      <!-- 登录表单 -->
-      <van-form v-if="mode === 'login'" @submit="onLogin" class="login-form">
-        <div class="field-wrapper">
-          <div class="field-icon-bg">
+    <main class="login-shell">
+      <section class="brand-panel" aria-label="平台信息">
+        <div class="panel-kicker">物业品质管理</div>
+        <h1>让现场检查、问题闭环与质量复盘保持一致标准</h1>
+        <p>
+          面向项目现场、区域管理与品质负责人，沉淀检查过程数据，统一项目口径，形成可追踪的质量管理闭环。
+        </p>
+
+        <div class="panel-visual" aria-hidden="true">
+          <div class="building">
+            <span v-for="n in 36" :key="n"></span>
+          </div>
+          <div class="inspection-card">
+            <div class="card-line strong"></div>
+            <div class="card-line"></div>
+            <div class="card-line short"></div>
+            <div class="check-row">
+              <van-icon name="success" />
+              <span>现场记录已归档</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel-stats">
+          <div>
+            <strong>8</strong>
+            <span>检查模块</span>
+          </div>
+          <div>
+            <strong>100%</strong>
+            <span>过程留痕</span>
+          </div>
+          <div>
+            <strong>闭环</strong>
+            <span>整改追踪</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="auth-card">
+        <div class="auth-heading">
+          <span class="auth-eyebrow">Account Access</span>
+          <h2>{{ mode === 'login' ? '登录智能品质检查系统' : '注册项目检查账号' }}</h2>
+          <p>{{ mode === 'login' ? '请输入账号信息进入工作台' : '请填写真实信息，便于绑定项目与检查记录' }}</p>
+        </div>
+
+        <div class="tab-bar" role="tablist">
+          <button
+            type="button"
+            :class="['tab-item', mode === 'login' && 'tab-active']"
+            @click="mode = 'login'"
+          >
+            账号登录
+          </button>
+          <button
+            type="button"
+            :class="['tab-item', mode === 'register' && 'tab-active']"
+            @click="switchToRegister"
+          >
+            账号注册
+          </button>
+        </div>
+
+        <van-form v-if="mode === 'login'" @submit="onLogin" class="login-form">
+          <label class="field-label">账号</label>
+          <div class="field-wrapper">
             <van-icon name="manager-o" class="field-icon" />
+            <van-field
+              v-model="loginForm.account"
+              placeholder="请输入账号"
+              :rules="[{ required: true, message: '请填写账号' }]"
+            />
           </div>
-          <van-field
-            v-model="loginForm.account"
-            placeholder="请输入账号"
-            :rules="[{ required: true, message: '请填写账号' }]"
-          />
-        </div>
-        <div class="field-wrapper">
-          <div class="field-icon-bg">
+
+          <label class="field-label">密码</label>
+          <div class="field-wrapper">
             <van-icon name="lock" class="field-icon" />
+            <van-field
+              v-model="loginForm.password"
+              :type="showLoginPwd ? 'text' : 'password'"
+              placeholder="请输入密码"
+              :rules="[{ required: true, message: '请填写密码' }]"
+              :right-icon="showLoginPwd ? 'eye-o' : 'closed-eye'"
+              @click-right-icon="showLoginPwd = !showLoginPwd"
+            />
           </div>
-          <van-field
-            v-model="loginForm.password"
-            :type="showLoginPwd ? 'text' : 'password'"
-            placeholder="请输入密码"
-            :rules="[{ required: true, message: '请填写密码' }]"
-            :right-icon="showLoginPwd ? 'eye-o' : 'closed-eye'"
-            @click-right-icon="showLoginPwd = !showLoginPwd"
-          />
-        </div>
 
-        <div class="form-extra">
-          <van-checkbox v-model="rememberMe" shape="square" icon-size="14px">
-            <span class="checkbox-text">记住密码</span>
-          </van-checkbox>
-          <span class="forgot-link" @click="showForgotTip">忘记密码?</span>
-        </div>
+          <div class="form-extra">
+            <van-checkbox v-model="keepSignedIn" shape="square" icon-size="14px">
+              <span class="checkbox-text">保持登录状态</span>
+            </van-checkbox>
+            <button type="button" class="forgot-link" @click="showForgotTip">忘记密码？</button>
+          </div>
 
-        <van-button block type="primary" native-type="submit" :loading="loading" class="submit-btn">
-          <span class="btn-text">登 录</span>
-          <div class="btn-shimmer"></div>
-        </van-button>
+          <van-button block native-type="submit" :loading="loading" class="submit-btn">
+            登录
+          </van-button>
+        </van-form>
 
-      </van-form>
-
-      <!-- 注册表单 -->
-      <van-form v-else @submit="onRegister" class="login-form">
-        <div class="field-wrapper">
-          <div class="field-icon-bg">
+        <van-form v-else @submit="onRegister" class="login-form">
+          <label class="field-label">手机号</label>
+          <div class="field-wrapper">
             <van-icon name="phone-o" class="field-icon" />
+            <van-field
+              v-model="registerForm.phone"
+              type="tel"
+              placeholder="请输入11位手机号"
+              maxlength="11"
+              :rules="[
+                { required: true, message: '请填写手机号' },
+                { pattern: /^1[3-9]\d{9}$/, message: '手机号格式不正确' }
+              ]"
+            />
           </div>
-          <van-field
-            v-model="registerForm.phone"
-            type="tel"
-            placeholder="请输入11位手机号"
-            maxlength="11"
-            :rules="[
-              { required: true, message: '请填写手机号' },
-              { pattern: /^1[3-9]\d{9}$/, message: '手机号格式不正确' }
-            ]"
-          />
-        </div>
-        <div class="field-wrapper">
-          <div class="field-icon-bg">
+
+          <label class="field-label">姓名</label>
+          <div class="field-wrapper">
             <van-icon name="user-o" class="field-icon" />
+            <van-field
+              v-model="registerForm.real_name"
+              placeholder="请输入真实姓名"
+              :rules="[{ required: true, message: '请填写姓名' }]"
+            />
           </div>
-          <van-field
-            v-model="registerForm.real_name"
-            placeholder="请输入真实姓名"
-            :rules="[{ required: true, message: '请填写姓名' }]"
-          />
-        </div>
-        <div class="field-wrapper" @click="openProjectPicker">
-          <div class="field-icon-bg">
+
+          <label class="field-label">所属项目</label>
+          <div class="field-wrapper selectable" @click="openProjectPicker">
             <van-icon name="location-o" class="field-icon" />
+            <div class="selected-projects">
+              <template v-if="selectedProjects.length">
+                <span v-for="(project, index) in selectedProjects" :key="project.id" class="project-tag">
+                  {{ project.name }}
+                  <em v-if="index === 0">默认</em>
+                </span>
+              </template>
+              <span v-else class="project-placeholder">请选择所属项目（可多选）</span>
+            </div>
+            <van-icon name="arrow-down" class="field-arrow" />
           </div>
-          <van-field
-            v-model="selectedProjectName"
-            placeholder="请选择所属项目"
-            readonly
-            :rules="[{ required: true, message: '请选择所属项目' }]"
-          />
-          <van-icon name="arrow-down" class="field-arrow" />
-        </div>
-        <div class="field-wrapper">
-          <div class="field-icon-bg">
+
+          <label class="field-label">密码</label>
+          <div class="field-wrapper">
             <van-icon name="lock" class="field-icon" />
+            <van-field
+              v-model="registerForm.password"
+              :type="showRegPwd ? 'text' : 'password'"
+              placeholder="字母+数字，不少于8位"
+              :rules="[
+                { required: true, message: '请填写密码' },
+                { validator: (val) => val.length >= 8 && /[a-zA-Z]/.test(val) && /\d/.test(val), message: '密码需包含字母和数字，不少于8位' }
+              ]"
+              :right-icon="showRegPwd ? 'eye-o' : 'closed-eye'"
+              @click-right-icon="showRegPwd = !showRegPwd"
+            />
           </div>
-          <van-field
-            v-model="registerForm.password"
-            :type="showRegPwd ? 'text' : 'password'"
-            placeholder="请设置密码（字母+数字，不少于8位）"
-            :rules="[
-              { required: true, message: '请填写密码' },
-              { validator: (val) => val.length >= 8 && /[a-zA-Z]/.test(val) && /\d/.test(val), message: '密码需包含字母和数字，不少于8位' }
-            ]"
-            :right-icon="showRegPwd ? 'eye-o' : 'closed-eye'"
-            @click-right-icon="showRegPwd = !showRegPwd"
-          />
-        </div>
-        <div class="field-wrapper">
-          <div class="field-icon-bg">
+
+          <label class="field-label">确认密码</label>
+          <div class="field-wrapper">
             <van-icon name="lock" class="field-icon" />
+            <van-field
+              v-model="registerForm.confirmPassword"
+              :type="showRegConfirmPwd ? 'text' : 'password'"
+              placeholder="请再次输入密码"
+              :rules="[
+                { required: true, message: '请确认密码' },
+                { validator: (val) => val === registerForm.password, message: '两次密码不一致' }
+              ]"
+              :right-icon="showRegConfirmPwd ? 'eye-o' : 'closed-eye'"
+              @click-right-icon="showRegConfirmPwd = !showRegConfirmPwd"
+            />
           </div>
-          <van-field
-            v-model="registerForm.confirmPassword"
-            :type="showRegConfirmPwd ? 'text' : 'password'"
-            placeholder="请再次输入密码"
-            :rules="[
-              { required: true, message: '请确认密码' },
-              { validator: (val) => val === registerForm.password, message: '两次密码不一致' }
-            ]"
-            :right-icon="showRegConfirmPwd ? 'eye-o' : 'closed-eye'"
-            @click-right-icon="showRegConfirmPwd = !showRegConfirmPwd"
-          />
+
+          <van-button block native-type="submit" :loading="loading" class="submit-btn">
+            注册并进入
+          </van-button>
+        </van-form>
+
+        <div class="agreement-row">
+          <van-checkbox v-model="agreementAccepted" shape="square" icon-size="14px" />
+          <span>
+            我已阅读并同意
+            <button type="button" @click="openLegalDocument('service')">《服务协议》</button>
+            与
+            <button type="button" @click="openLegalDocument('privacy')">《隐私政策》</button>
+          </span>
         </div>
+      </section>
+    </main>
 
-        <van-button block type="primary" native-type="submit" :loading="loading" class="submit-btn">
-          <span class="btn-text">注 册</span>
-          <div class="btn-shimmer"></div>
-        </van-button>
+    <footer class="footer">
+      <span>© 2026 智能品质检查系统</span>
+      <span>企业质量管理平台</span>
+      <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">粤ICP备2026046557号</a>
+    </footer>
 
-      </van-form>
-    </div>
+    <van-popup v-model:show="showProjectPicker" position="bottom" round class="project-popup">
+      <div class="project-picker">
+        <div class="project-picker-header">
+          <h3>选择所属项目</h3>
+          <p>可多选，第一个选择的项目将作为默认项目</p>
+        </div>
+        <van-checkbox-group v-model="draftProjectIds" class="project-options">
+          <van-checkbox
+            v-for="project in projects"
+            :key="project.id"
+            :name="project.id"
+            shape="square"
+            class="project-option"
+          >
+            {{ project.name }}
+          </van-checkbox>
+        </van-checkbox-group>
+        <div class="project-picker-summary">已选择 {{ draftProjectIds.length }} 个项目</div>
+        <div class="project-picker-actions">
+          <van-button class="project-cancel" @click="showProjectPicker = false">取消</van-button>
+          <van-button class="project-confirm" @click="confirmProjects">确认选择</van-button>
+        </div>
+      </div>
+    </van-popup>
 
-    <!-- 底部通知栏 -->
-    <div class="bottom-notice">
-      <div class="notice-dot"></div>
-      <span class="notice-date">{{ currentDate }}</span>
-      <span class="notice-divider">|</span>
-      <span class="notice-text">品质检查系统 · 智能质量管理平台</span>
-    </div>
+    <van-popup v-model:show="showLegalDocument" position="bottom" round class="legal-popup">
+      <article class="legal-document">
+        <header class="legal-header">
+          <div>
+            <h3>{{ legalTitle }}</h3>
+            <p>生效日期：2026年5月24日</p>
+          </div>
+          <button type="button" aria-label="关闭" @click="showLegalDocument = false">
+            <van-icon name="cross" />
+          </button>
+        </header>
 
-    <!-- 底部版权 -->
-    <div class="footer">
-      <p>© 2026 品质检查系统 · Quality Inspection Platform</p>
-    </div>
+        <template v-if="legalType === 'service'">
+          <section>
+            <h4>一、服务内容</h4>
+            <p>品质检查系统提供账号与项目关联、现场检查记录、问题照片上传、智能评分分析、检查报告生成及整改跟踪等服务，用于物业品质管理与工作协同。</p>
+          </section>
+          <section>
+            <h4>二、账号注册与使用</h4>
+            <p>您应提交真实、准确的信息，并仅选择您获授权参与的所属项目。账号仅限本人使用，您应妥善保管登录凭证并对账号下的操作承担责任。</p>
+          </section>
+          <section>
+            <h4>三、检查资料与行为规范</h4>
+            <p>您应确保录入的检查记录、问题描述、整改信息及上传照片真实、合法，并已取得必要授权。不得上传违法、不实、侵犯他人权益或与业务无关的内容，不得干扰系统正常运行。</p>
+          </section>
+          <section>
+            <h4>四、智能分析说明</h4>
+            <p>系统可能使用智能能力辅助形成评分建议、问题分析与报告内容。相关输出用于辅助管理和复核，不替代有权限人员作出的最终业务判断。</p>
+          </section>
+          <section>
+            <h4>五、服务调整与责任范围</h4>
+            <p>为维护安全和优化服务，系统可进行功能升级或必要维护。因网络故障、不可抗力、用户违规操作等非运营方可控原因造成的影响，将在法律允许范围内处理。</p>
+          </section>
+          <section>
+            <h4>六、协议变更与联系</h4>
+            <p>协议更新后将在系统中提示或公示。您继续使用服务即表示接受更新内容；如有异议，可停止使用并联系运营方处理。</p>
+          </section>
+        </template>
 
-    <!-- 项目选择弹出层 -->
-    <van-popup v-model:show="showProjectPicker" position="bottom" round>
-      <van-picker
-        title="选择所属项目"
-        :columns="projectColumns"
-        @confirm="onProjectConfirm"
-        @cancel="showProjectPicker = false"
-      />
+        <template v-else>
+          <section>
+            <h4>一、处理者信息</h4>
+            <p>本系统个人信息处理者为李英群。我们依据合法、正当、必要和诚信原则处理您的个人信息。</p>
+          </section>
+          <section>
+            <h4>二、收集的信息</h4>
+            <p>为提供服务，我们可能处理您的手机号、姓名、所属项目、登录凭证的加密校验信息、登录及安全日志，以及您在业务过程中提交的检查任务、问题描述、照片、整改记录、评分与报告信息。</p>
+          </section>
+          <section>
+            <h4>三、处理目的</h4>
+            <p>上述信息用于注册登录、项目权限管理、检查与整改闭环、评分分析与报告生成、运行安全审计、故障排查和用户支持。密码不会以明文形式保存。</p>
+          </section>
+          <section>
+            <h4>四、共享与委托处理</h4>
+            <p>我们不会出售您的个人信息。为实现系统托管、存储或智能分析等必要功能，可能向服务提供方委托处理与功能所需的最小范围信息；法律法规要求提供的除外。</p>
+          </section>
+          <section>
+            <h4>五、保存与安全</h4>
+            <p>我们在实现业务目的和满足法定义务所必要的期限内保存信息，并采取访问控制、身份鉴权、日志审计等措施降低未经授权访问、泄露或篡改风险。</p>
+          </section>
+          <section>
+            <h4>六、您的权利</h4>
+            <p>您可联系我们申请查询、更正、删除个人信息，撤回同意或申请注销账号。撤回同意不影响撤回前已开展的处理；必要信息缺失可能导致部分服务无法继续提供。</p>
+          </section>
+          <section>
+            <h4>七、未成年人及政策更新</h4>
+            <p>本系统面向物业品质管理工作人员，不面向未成年人提供服务。政策发生重要变化时，我们将通过系统提示或公示方式告知您。</p>
+          </section>
+        </template>
+
+        <div class="legal-contact">
+          <strong>运营方 / 个人信息处理者：李英群</strong>
+          <span>对外联系电话：<a href="tel:18578426218">18578426218</a></span>
+        </div>
+      </article>
     </van-popup>
   </div>
 </template>
@@ -313,11 +328,15 @@ const loading = ref(false)
 const showLoginPwd = ref(false)
 const showRegPwd = ref(false)
 const showRegConfirmPwd = ref(false)
-const rememberMe = ref(false)
+const keepSignedIn = ref(false)
+const agreementAccepted = ref(false)
+const showLegalDocument = ref(false)
+const legalType = ref('service')
 const projects = ref([])
 const showProjectPicker = ref(false)
+const selectedProjectIds = ref([])
+const draftProjectIds = ref([])
 
-// 动态加载项目列表
 onMounted(async () => {
   try {
     const res = await getProjects()
@@ -332,24 +351,41 @@ const currentDate = computed(() => {
   return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`
 })
 
-const selectedProjectName = computed(() => {
-  const p = projects.value.find(p => p.id === registerForm.project_id)
-  return p ? p.name : ''
-})
-
-const projectColumns = computed(() =>
-  projects.value.map(p => ({ text: p.name, value: p.id }))
+const selectedProjects = computed(() =>
+  selectedProjectIds.value
+    .map(id => projects.value.find(project => project.id === id))
+    .filter(Boolean)
 )
 
-const onProjectConfirm = ({ selectedOptions }) => {
-  const selected = selectedOptions[0]
-  registerForm.project_id = selected.value
-  registerForm.project_name = selected.text
-  showProjectPicker.value = false
+const legalTitle = computed(() => legalType.value === 'service' ? '服务协议' : '隐私政策')
+
+const openLegalDocument = (type) => {
+  legalType.value = type
+  showLegalDocument.value = true
+}
+
+const validateAgreement = () => {
+  if (!agreementAccepted.value) {
+    showToast('请先阅读并同意《服务协议》与《隐私政策》')
+    return false
+  }
+  return true
 }
 
 const openProjectPicker = () => {
+  draftProjectIds.value = [...selectedProjectIds.value]
   showProjectPicker.value = true
+}
+
+const confirmProjects = () => {
+  if (!draftProjectIds.value.length) {
+    showToast('请至少选择一个所属项目')
+    return
+  }
+  selectedProjectIds.value = [...draftProjectIds.value]
+  registerForm.project_id = selectedProjectIds.value[0]
+  registerForm.project_name = selectedProjects.value[0]?.name || null
+  showProjectPicker.value = false
 }
 
 const loginForm = reactive({
@@ -371,6 +407,8 @@ const switchToRegister = () => {
   registerForm.real_name = ''
   registerForm.project_id = null
   registerForm.project_name = null
+  selectedProjectIds.value = []
+  draftProjectIds.value = []
   registerForm.password = ''
   registerForm.confirmPassword = ''
   mode.value = 'register'
@@ -385,11 +423,12 @@ const showForgotTip = () => {
 }
 
 const onLogin = async () => {
+  if (!validateAgreement()) return
+
   loading.value = true
   try {
-    const res = await authStore.login(loginForm.account, loginForm.password)
+    const res = await authStore.login(loginForm.account, loginForm.password, keepSignedIn.value)
     showSuccessToast('登录成功')
-    // 延迟跳转，等待Toast动画完成，防止弹窗DOM残留
     await new Promise(r => setTimeout(r, 300))
     if (res.user.must_change_pwd) {
       router.push('/change-password')
@@ -405,33 +444,24 @@ const onLogin = async () => {
 }
 
 const onRegister = async () => {
-  // ★ 注册前验证项目选择
-  if (!registerForm.project_name) {
-    // 如果 project_name 丢失，从 projects 列表按 project_id 反查（防御性编程）
-    if (registerForm.project_id) {
-      const found = projects.value.find(p => p.id === registerForm.project_id)
-      if (found) {
-        registerForm.project_name = found.name
-        console.warn('[注册] project_name 丢失，已从项目列表反查恢复:', found.name)
-      }
-    }
-  }
-  if (!registerForm.project_name) {
-    showToast('请先选择所属项目')
+  if (!validateAgreement()) return
+
+  if (!selectedProjects.value.length) {
+    showToast('请至少选择一个所属项目')
     return
   }
 
   loading.value = true
   try {
-    // 清除旧的登录态，不影响当前表单数据
-    localStorage.removeItem('token')
-    localStorage.removeItem('user')
-
+    const selectedIds = selectedProjects.value.map(project => project.id)
+    const selectedNames = selectedProjects.value.map(project => project.name)
     const submitData = {
       phone: registerForm.phone,
       real_name: registerForm.real_name,
-      project_id: registerForm.project_id,
-      project_name: registerForm.project_name,
+      project_id: selectedIds[0],
+      project_name: selectedNames[0],
+      project_ids: selectedIds,
+      project_names: selectedNames,
       password: registerForm.password
     }
 
@@ -439,25 +469,22 @@ const onRegister = async () => {
 
     const res = await register(submitData)
 
-    // ★ 验证后端返回的项目归属是否与用户选择一致
     if (res.user) {
-      const returnedProjectName = res.user.project_name
-      const selectedProjectName = registerForm.project_name
-      if (returnedProjectName && returnedProjectName !== selectedProjectName) {
-        console.error(`[注册] ★ 项目归属不一致！用户选择=${selectedProjectName}, 后端返回=${returnedProjectName}`)
-        showToast(`项目归属异常：${returnedProjectName}，请联系管理员`)
+      const returnedIds = (res.user.projects || []).map(project => project.id)
+      const projectBindingMatches = returnedIds.length === selectedIds.length &&
+        selectedIds.every((id, index) => returnedIds[index] === id) &&
+        res.user.project_id === selectedIds[0]
+      if (!projectBindingMatches) {
+        console.error('[注册] 项目归属不一致', { selectedIds, returnedIds, defaultProjectId: res.user.project_id })
+        showToast('项目归属异常，请联系管理员')
         loading.value = false
         return
       }
-      console.log(`[注册] 项目归属验证通过: ${returnedProjectName} (id=${res.user.project_id})`)
+      console.log('[注册] 项目归属验证通过:', returnedIds)
     }
 
-    authStore.token = res.access_token
-    authStore.user = res.user
-    localStorage.setItem('token', res.access_token)
-    localStorage.setItem('user', JSON.stringify(res.user))
+    authStore.applyAuthenticatedSession(res, false)
     showSuccessToast('注册成功')
-    // 延迟跳转，等待Toast动画完成，防止弹窗DOM残留
     await new Promise(r => setTimeout(r, 300))
     router.push('/tasks')
   } catch (error) {
@@ -473,728 +500,751 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-/* ========== 页面基础 ========== */
 .login-page {
   min-height: 100vh;
   position: relative;
   display: flex;
   flex-direction: column;
+  overflow-x: hidden;
+  background:
+    linear-gradient(90deg, rgba(15, 40, 56, 0.04) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(15, 40, 56, 0.04) 1px, transparent 1px),
+    linear-gradient(135deg, #eef3f6 0%, #f8faf9 48%, #e7eef0 100%);
+  background-size: 56px 56px, 56px 56px, auto;
+  color: #1f2933;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+.login-page::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(118deg, rgba(12, 55, 74, 0.16) 0%, rgba(12, 55, 74, 0.08) 34%, transparent 34.2%),
+    linear-gradient(142deg, transparent 62%, rgba(33, 92, 101, 0.1) 62.2%, rgba(33, 92, 101, 0.02) 100%);
+  pointer-events: none;
+}
+
+.topbar {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 28px 44px 0;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-mark {
+  width: 42px;
+  height: 42px;
+  display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px 20px 90px;
-  overflow: hidden;
-  background: #050510;
-}
-
-/* 多层背景 */
-.bg-base {
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(ellipse 80% 50% at 25% 15%, rgba(124, 58, 237, 0.2) 0%, transparent 50%),
-    radial-gradient(ellipse 50% 40% at 75% 85%, rgba(79, 70, 229, 0.12) 0%, transparent 50%),
-    linear-gradient(180deg, #0f0b2a 0%, #080620 50%, #050510 100%);
-  z-index: 0;
-}
-
-.bg-nebula {
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(ellipse 40% 30% at 60% 20%, rgba(168, 85, 247, 0.08) 0%, transparent 60%),
-    radial-gradient(ellipse 35% 25% at 30% 70%, rgba(99, 102, 241, 0.06) 0%, transparent 60%),
-    radial-gradient(ellipse 50% 35% at 80% 50%, rgba(139, 92, 246, 0.05) 0%, transparent 55%);
-  animation: nebula-drift 20s ease-in-out infinite alternate;
-  z-index: 0;
-}
-
-.bg-stars {
-  position: absolute;
-  inset: 0;
-  background-image:
-    radial-gradient(1px 1px at 10% 15%, rgba(255,255,255,0.4), transparent),
-    radial-gradient(1px 1px at 25% 75%, rgba(255,255,255,0.3), transparent),
-    radial-gradient(1px 1px at 45% 8%, rgba(255,255,255,0.35), transparent),
-    radial-gradient(1.5px 1.5px at 65% 35%, rgba(196,181,253,0.5), transparent),
-    radial-gradient(1px 1px at 80% 70%, rgba(255,255,255,0.25), transparent),
-    radial-gradient(1px 1px at 92% 20%, rgba(255,255,255,0.3), transparent),
-    radial-gradient(1px 1px at 5% 55%, rgba(255,255,255,0.2), transparent),
-    radial-gradient(1.5px 1.5px at 35% 40%, rgba(167,139,250,0.45), transparent),
-    radial-gradient(1px 1px at 55% 85%, rgba(255,255,255,0.3), transparent),
-    radial-gradient(1px 1px at 72% 55%, rgba(255,255,255,0.25), transparent),
-    radial-gradient(1px 1px at 18% 92%, rgba(255,255,255,0.2), transparent),
-    radial-gradient(1.5px 1.5px at 88% 90%, rgba(129,140,248,0.4), transparent);
-  z-index: 0;
-}
-
-.bg-aurora {
-  position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: conic-gradient(from 0deg at 50% 50%,
-    transparent 0deg,
-    rgba(124, 58, 237, 0.03) 60deg,
-    transparent 120deg,
-    rgba(99, 102, 241, 0.02) 200deg,
-    transparent 280deg,
-    rgba(139, 92, 246, 0.03) 340deg,
-    transparent 360deg
-  );
-  animation: aurora-rotate 30s linear infinite;
-  z-index: 0;
-}
-
-@keyframes nebula-drift {
-  0% { transform: translate(0, 0) scale(1); }
-  100% { transform: translate(10px, -10px) scale(1.05); }
-}
-
-@keyframes aurora-rotate {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-/* ========== 宇宙传送门 ========== */
-.portal-wrapper {
-  position: absolute;
-  top: -60px;
-  left: -100px;
-  width: 360px;
-  height: 360px;
-  z-index: 0;
-  pointer-events: none;
-}
-
-.portal-ring {
-  position: absolute;
-  border-radius: 50%;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-}
-
-.ring-1 {
-  width: 360px;
-  height: 360px;
-  border: 1px solid rgba(139, 92, 246, 0.1);
-  background: radial-gradient(circle, rgba(139, 92, 246, 0.05) 0%, transparent 70%);
-  box-shadow: 0 0 60px rgba(139, 92, 246, 0.06), inset 0 0 60px rgba(139, 92, 246, 0.03);
-  animation: ring-rotate 25s linear infinite;
-}
-
-.ring-2 {
-  width: 280px;
-  height: 280px;
-  border: 1px solid rgba(99, 102, 241, 0.18);
-  background: radial-gradient(circle, rgba(99, 102, 241, 0.1) 0%, transparent 70%);
-  box-shadow: 0 0 40px rgba(99, 102, 241, 0.08);
-  animation: ring-rotate 18s linear infinite reverse;
-}
-
-.ring-3 {
-  width: 200px;
-  height: 200px;
-  border: 1.5px solid rgba(168, 85, 247, 0.28);
-  background: radial-gradient(circle, rgba(168, 85, 247, 0.12) 0%, transparent 60%);
-  box-shadow: 0 0 30px rgba(168, 85, 247, 0.1), inset 0 0 30px rgba(168, 85, 247, 0.05);
-  animation: ring-rotate 14s linear infinite;
-}
-
-.ring-4 {
-  width: 130px;
-  height: 130px;
-  border: 1px solid rgba(196, 181, 253, 0.35);
-  background: radial-gradient(circle, rgba(196, 181, 253, 0.15) 0%, transparent 60%);
-  box-shadow: 0 0 20px rgba(139, 92, 246, 0.15);
-  animation: ring-pulse 4s ease-in-out infinite;
-}
-
-.ring-5 {
-  width: 80px;
-  height: 80px;
-  border: 1px solid rgba(232, 219, 254, 0.2);
-  background: radial-gradient(circle, rgba(232, 219, 254, 0.1) 0%, transparent 60%);
-  animation: ring-rotate 8s linear infinite reverse;
-}
-
-.portal-core {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-  background: radial-gradient(circle,
-    rgba(232, 219, 254, 0.7) 0%,
-    rgba(168, 85, 247, 0.5) 30%,
-    rgba(124, 58, 237, 0.3) 60%,
-    transparent 80%
-  );
-  box-shadow: 0 0 40px rgba(168, 85, 247, 0.4), 0 0 80px rgba(124, 58, 237, 0.2);
-  animation: core-breathe 3s ease-in-out infinite;
-}
-
-.portal-pulse {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  border-radius: 50%;
-  border: 1px solid rgba(168, 85, 247, 0.4);
-  box-shadow: 0 0 15px rgba(168, 85, 247, 0.2);
-}
-
-.pulse-1 {
-  width: 50px;
-  height: 50px;
-  animation: portal-expand 3s ease-out infinite;
-}
-
-.pulse-2 {
-  width: 50px;
-  height: 50px;
-  animation: portal-expand 3s ease-out infinite 1.5s;
-}
-
-/* 粒子 */
-.particle {
-  position: absolute;
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: rgba(196, 181, 253, 0.8);
-  top: 50%;
-  left: 50%;
-  box-shadow: 0 0 6px rgba(168, 85, 247, 0.4);
-}
-
-.p1 { animation: orbit1 8s linear infinite; }
-.p2 { animation: orbit2 10s linear infinite; width: 2px; height: 2px; background: rgba(129, 140, 248, 0.9); }
-.p3 { animation: orbit3 7s linear infinite; width: 4px; height: 4px; background: rgba(232, 219, 254, 0.7); }
-.p4 { animation: orbit4 12s linear infinite; width: 2px; height: 2px; background: rgba(196, 181, 253, 0.7); }
-.p5 { animation: orbit5 9s linear infinite; width: 3px; height: 3px; background: rgba(129, 140, 248, 0.8); }
-.p6 { animation: orbit6 11s linear infinite; width: 2px; height: 2px; background: rgba(99, 102, 241, 0.8); }
-.p7 { animation: orbit7 6s linear infinite; width: 2px; height: 2px; background: rgba(232, 219, 254, 0.6); }
-.p8 { animation: orbit8 14s linear infinite; width: 3px; height: 3px; background: rgba(139, 92, 246, 0.7); }
-.p9 { animation: orbit9 16s linear infinite; width: 2px; height: 2px; background: rgba(196, 181, 253, 0.6); }
-.p10 { animation: orbit10 13s linear infinite; width: 2px; height: 2px; background: rgba(129, 140, 248, 0.7); }
-
-/* 光束 */
-.light-beam {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 280px;
-  height: 2px;
-  transform-origin: left center;
-}
-
-.beam-1 {
-  transform: rotate(-25deg);
-  background: linear-gradient(90deg, rgba(139, 92, 246, 0.5), rgba(236, 72, 153, 0.25), transparent);
-  filter: blur(0.5px);
-  animation: beam-fade 4s ease-in-out infinite;
-}
-
-.beam-2 {
-  transform: rotate(200deg);
-  background: linear-gradient(90deg, rgba(99, 102, 241, 0.4), rgba(168, 85, 247, 0.2), transparent);
-  filter: blur(0.5px);
-  animation: beam-fade 4s ease-in-out infinite 2s;
-  width: 200px;
-}
-
-.beam-3 {
-  transform: rotate(110deg);
-  background: linear-gradient(90deg, rgba(168, 85, 247, 0.3), rgba(236, 72, 153, 0.15), transparent);
-  filter: blur(0.5px);
-  animation: beam-fade 5s ease-in-out infinite 1s;
-  width: 160px;
-  height: 1px;
-}
-
-/* ========== 漂浮粒子 ========== */
-.floating-dots {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-}
-
-.dot {
-  position: absolute;
-  border-radius: 50%;
-  opacity: 0;
-  animation: float-up 8s ease-in-out infinite;
-}
-
-.d1 { left: 10%; width: 3px; height: 3px; background: rgba(167,139,250,0.6); animation-delay: 0s; }
-.d2 { left: 25%; width: 2px; height: 2px; background: rgba(129,140,248,0.5); animation-delay: 1s; }
-.d3 { left: 45%; width: 4px; height: 4px; background: rgba(196,181,253,0.4); animation-delay: 2s; }
-.d4 { left: 65%; width: 2px; height: 2px; background: rgba(139,92,246,0.5); animation-delay: 3s; }
-.d5 { left: 80%; width: 3px; height: 3px; background: rgba(99,102,241,0.4); animation-delay: 4s; }
-.d6 { left: 35%; width: 2px; height: 2px; background: rgba(232,219,254,0.3); animation-delay: 5s; }
-.d7 { left: 55%; width: 2px; height: 2px; background: rgba(167,139,250,0.5); animation-delay: 6s; }
-.d8 { left: 90%; width: 3px; height: 3px; background: rgba(129,140,248,0.4); animation-delay: 7s; }
-
-@keyframes float-up {
-  0% { bottom: -5%; opacity: 0; transform: translateX(0); }
-  10% { opacity: 0.6; }
-  90% { opacity: 0.6; }
-  100% { bottom: 105%; opacity: 0; transform: translateX(20px); }
-}
-
-/* 模糊球 */
-.orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(80px);
-  z-index: 0;
-  pointer-events: none;
-}
-
-.orb-left {
-  bottom: 15%;
-  left: -60px;
-  width: 220px;
-  height: 220px;
-  background: rgba(124, 58, 237, 0.1);
-}
-
-.orb-right {
-  bottom: 5%;
-  right: -50px;
-  width: 180px;
-  height: 180px;
-  background: rgba(168, 85, 247, 0.08);
-}
-
-/* ========== 动画 ========== */
-@keyframes ring-rotate {
-  from { transform: translate(-50%, -50%) rotate(0deg); }
-  to { transform: translate(-50%, -50%) rotate(360deg); }
-}
-
-@keyframes ring-pulse {
-  0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.7; }
-  50% { transform: translate(-50%, -50%) scale(1.1); opacity: 1; }
-}
-
-@keyframes core-breathe {
-  0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.9; }
-  50% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
-}
-
-@keyframes portal-expand {
-  0% { width: 50px; height: 50px; opacity: 0.6; transform: translate(-50%, -50%); }
-  100% { width: 200px; height: 200px; opacity: 0; transform: translate(-50%, -50%); }
-}
-
-@keyframes beam-fade {
-  0%, 100% { opacity: 0.4; }
-  50% { opacity: 1; }
-}
-
-@keyframes orbit1 { from { transform: rotate(0deg) translateX(110px) rotate(0deg); } to { transform: rotate(360deg) translateX(110px) rotate(-360deg); } }
-@keyframes orbit2 { from { transform: rotate(45deg) translateX(135px) rotate(-45deg); } to { transform: rotate(405deg) translateX(135px) rotate(-405deg); } }
-@keyframes orbit3 { from { transform: rotate(90deg) translateX(80px) rotate(-90deg); } to { transform: rotate(450deg) translateX(80px) rotate(-450deg); } }
-@keyframes orbit4 { from { transform: rotate(135deg) translateX(155px) rotate(-135deg); } to { transform: rotate(495deg) translateX(155px) rotate(-495deg); } }
-@keyframes orbit5 { from { transform: rotate(180deg) translateX(95px) rotate(-180deg); } to { transform: rotate(540deg) translateX(95px) rotate(-540deg); } }
-@keyframes orbit6 { from { transform: rotate(225deg) translateX(145px) rotate(-225deg); } to { transform: rotate(585deg) translateX(145px) rotate(-585deg); } }
-@keyframes orbit7 { from { transform: rotate(270deg) translateX(65px) rotate(-270deg); } to { transform: rotate(630deg) translateX(65px) rotate(-630deg); } }
-@keyframes orbit8 { from { transform: rotate(30deg) translateX(160px) rotate(-30deg); } to { transform: rotate(390deg) translateX(160px) rotate(-390deg); } }
-@keyframes orbit9 { from { transform: rotate(160deg) translateX(125px) rotate(-160deg); } to { transform: rotate(520deg) translateX(125px) rotate(-520deg); } }
-@keyframes orbit10 { from { transform: rotate(300deg) translateX(100px) rotate(-300deg); } to { transform: rotate(660deg) translateX(100px) rotate(-660deg); } }
-
-/* ========== 左上 Logo ========== */
-.top-logo {
-  position: absolute;
-  top: 18px;
-  left: 18px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  z-index: 2;
-}
-
-.logo-mark {
-  width: 44px;
-  height: 44px;
-  position: relative;
-  filter: drop-shadow(0 0 10px rgba(139,92,246,0.5));
-  animation: mark-breathe 4s ease-in-out infinite;
-}
-
-@keyframes mark-breathe {
-  0%, 100% { filter: drop-shadow(0 0 10px rgba(139,92,246,0.4)); }
-  50% { filter: drop-shadow(0 0 18px rgba(139,92,246,0.7)); }
-}
-
-.logo-text-group {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.logo-title {
-  font-size: 16px;
+  border-radius: 8px;
   color: #ffffff;
-  font-weight: 700;
-  letter-spacing: 3px;
-  line-height: 1.2;
-  text-shadow: 0 0 12px rgba(139,92,246,0.3);
+  font-size: 22px;
+  background: #143947;
+  box-shadow: 0 10px 24px rgba(20, 57, 71, 0.2);
 }
 
-.logo-subtitle {
-  font-size: 8px;
-  color: rgba(196,181,253,0.55);
-  font-weight: 500;
-  letter-spacing: 2.5px;
+.brand-name {
+  font-size: 18px;
+  line-height: 1.2;
+  font-weight: 700;
+  color: #12313d;
+}
+
+.brand-subtitle {
+  margin-top: 3px;
+  font-size: 11px;
+  color: #6a7a82;
   text-transform: uppercase;
 }
 
-/* ========== 登录卡片 ========== */
-.login-card {
-  width: 100%;
-  max-width: 380px;
-  background: rgba(15, 15, 35, 0.85);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(139, 92, 246, 0.15);
-  border-radius: 16px;
-  padding: 30px 28px;
-  z-index: 1;
+.topbar-meta {
+  font-size: 13px;
+  color: #667982;
+}
+
+.login-shell {
   position: relative;
+  z-index: 1;
+  width: min(1080px, calc(100% - 48px));
+  margin: auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) 420px;
+  min-height: 620px;
+  border: 1px solid rgba(18, 49, 61, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.76);
+  box-shadow: 0 24px 80px rgba(15, 40, 56, 0.16);
   overflow: hidden;
-  box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.4),
-    0 0 60px rgba(124, 58, 237, 0.06),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
-/* 顶部发光线 */
-.card-glow-line {
-  position: absolute;
-  top: 0;
-  left: 15%;
-  right: 15%;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.6), rgba(99, 102, 241, 0.8), rgba(139, 92, 246, 0.6), transparent);
-  filter: blur(1px);
-  box-shadow: 0 0 12px rgba(139, 92, 246, 0.3);
-}
-
-/* 角落装饰 */
-.corner-deco {
-  position: absolute;
-  width: 20px;
-  height: 20px;
-  border-color: rgba(139, 92, 246, 0.2);
-  border-style: solid;
-}
-
-.corner-tl { top: 8px; left: 8px; border-width: 1px 0 0 1px; border-radius: 4px 0 0 0; }
-.corner-tr { top: 8px; right: 8px; border-width: 1px 1px 0 0; border-radius: 0 4px 0 0; }
-.corner-bl { bottom: 8px; left: 8px; border-width: 0 0 1px 1px; border-radius: 0 0 0 4px; }
-.corner-br { bottom: 8px; right: 8px; border-width: 0 1px 1px 0; border-radius: 0 0 4px 0; }
-
-/* 卡片头部 */
-.card-header {
+.brand-panel {
+  position: relative;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  margin-bottom: 22px;
+  padding: 56px;
+  background:
+    linear-gradient(135deg, rgba(16, 49, 62, 0.98) 0%, rgba(20, 66, 78, 0.96) 58%, rgba(32, 93, 93, 0.94) 100%);
+  color: #ffffff;
+  overflow: hidden;
 }
 
-.title-icon {
-  margin-bottom: 12px;
-  animation: emblem-float 4s ease-in-out infinite;
-  filter: drop-shadow(0 0 8px rgba(167,139,250,0.3));
+.brand-panel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 72px 72px;
+  opacity: 0.7;
 }
 
-@keyframes emblem-float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-4px); }
+.panel-kicker,
+.brand-panel h1,
+.brand-panel p,
+.panel-visual,
+.panel-stats {
+  position: relative;
+  z-index: 1;
 }
 
-.card-title {
-  font-size: 20px;
+.panel-kicker {
+  width: fit-content;
+  padding: 7px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  font-size: 13px;
+  color: #dce7e7;
+}
+
+.brand-panel h1 {
+  max-width: 560px;
+  margin: 28px 0 18px;
+  font-size: 36px;
+  line-height: 1.24;
   font-weight: 700;
-  background: linear-gradient(135deg, #e0e7ff 0%, #c4b5fd 50%, #a78bfa 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  letter-spacing: 1px;
 }
 
-/* ========== Tab 下划线风格 ========== */
-.tab-bar {
+.brand-panel p {
+  max-width: 520px;
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.9;
+  color: #cfdbdc;
+}
+
+.panel-visual {
+  flex: 1;
+  min-height: 230px;
+  margin-top: 34px;
+}
+
+.building {
+  position: absolute;
+  left: 4px;
+  bottom: 8px;
+  width: 230px;
+  height: 210px;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 12px;
+  padding: 28px 24px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.building span {
+  min-width: 0;
+  height: 18px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.building span:nth-child(3n) {
+  background: rgba(159, 197, 187, 0.58);
+}
+
+.inspection-card {
+  position: absolute;
+  right: 10px;
+  bottom: 44px;
+  width: 280px;
+  padding: 22px;
+  border-radius: 8px;
+  background: #f7fbfa;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+}
+
+.card-line {
+  height: 10px;
+  margin-bottom: 12px;
+  border-radius: 999px;
+  background: #c8d7d6;
+}
+
+.card-line.strong {
+  width: 62%;
+  height: 14px;
+  background: #173f4b;
+}
+
+.card-line.short {
+  width: 46%;
+}
+
+.check-row {
   display: flex;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  align-items: center;
+  gap: 8px;
+  margin-top: 20px;
+  color: #245f55;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.panel-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 28px;
+}
+
+.panel-stats div {
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.panel-stats strong {
+  display: block;
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+.panel-stats span {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: #c9d7d7;
+}
+
+.auth-card {
+  padding: 52px 44px 42px;
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.auth-heading {
+  margin-bottom: 26px;
+}
+
+.auth-eyebrow {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 12px;
+  color: #6f838b;
+  text-transform: uppercase;
+}
+
+.auth-heading h2 {
+  margin: 0;
+  font-size: 25px;
+  line-height: 1.3;
+  color: #12313d;
+}
+
+.auth-heading p {
+  margin: 10px 0 0;
+  font-size: 14px;
+  color: #6d7b82;
+}
+
+.tab-bar {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+  padding: 4px;
   margin-bottom: 24px;
+  border-radius: 8px;
+  background: #edf3f4;
 }
 
 .tab-item {
-  flex: 1;
-  text-align: center;
-  padding: 10px 0;
+  height: 40px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #68787f;
   font-size: 14px;
-  color: #666666;
+  font-weight: 600;
   cursor: pointer;
-  position: relative;
-  transition: color 0.3s;
 }
 
 .tab-item.tab-active {
-  color: #ffffff;
+  color: #12313d;
+  background: #ffffff;
+  box-shadow: 0 5px 14px rgba(15, 40, 56, 0.08);
 }
 
-.tab-underline {
-  position: absolute;
-  bottom: -1px;
-  left: 15%;
-  right: 15%;
-  height: 2px;
-  background: linear-gradient(90deg, #7c3aed, #6366f1, #818cf8);
-  border-radius: 1px;
-  box-shadow: 0 0 8px rgba(124, 58, 237, 0.4);
-}
-
-/* ========== 表单字段 ========== */
 .login-form {
   width: 100%;
+}
+
+.field-label {
+  display: block;
+  margin: 14px 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #2d3d44;
 }
 
 .field-wrapper {
   display: flex;
   align-items: center;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  min-height: 48px;
+  border: 1px solid #d8e1e4;
   border-radius: 8px;
-  margin-bottom: 14px;
-  transition: all 0.3s ease;
-  overflow: hidden;
+  background: #ffffff;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .field-wrapper:focus-within {
-  border-color: rgba(139, 92, 246, 0.4);
-  background: rgba(139, 92, 246, 0.04);
-  box-shadow: 0 0 20px rgba(139, 92, 246, 0.08), inset 0 0 20px rgba(139, 92, 246, 0.02);
+  border-color: #24675d;
+  box-shadow: 0 0 0 3px rgba(36, 103, 93, 0.12);
 }
 
-.field-icon-bg {
-  width: 38px;
-  height: 38px;
+.field-wrapper.selectable {
+  cursor: pointer;
+}
+
+.selected-projects {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(139, 92, 246, 0.08);
-  border-right: 1px solid rgba(255, 255, 255, 0.06);
-  flex-shrink: 0;
-  margin: 1px 0 1px 1px;
-  border-radius: 6px 0 0 6px;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+  padding: 9px 4px 9px 0;
 }
 
-.field-wrapper:focus-within .field-icon-bg {
-  background: rgba(139, 92, 246, 0.15);
+.project-placeholder {
+  align-self: center;
+  color: #9aa8ae;
+  font-size: 14px;
+}
+
+.project-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: #eaf3f1;
+  color: #234c4c;
+  font-size: 12px;
+}
+
+.project-tag em {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: #24675d;
+  color: #ffffff;
+  font-size: 10px;
+  font-style: normal;
 }
 
 .field-icon {
-  color: rgba(167, 139, 250, 0.6);
-  font-size: 16px;
+  width: 46px;
+  color: #789099;
+  font-size: 18px;
+  text-align: center;
+  flex-shrink: 0;
 }
 
 .field-wrapper:focus-within .field-icon {
-  color: rgba(167, 139, 250, 0.9);
+  color: #24675d;
 }
 
 .field-wrapper :deep(.van-cell) {
+  flex: 1;
+  min-width: 0;
+  padding: 0 12px 0 0;
   background: transparent;
-  padding: 10px 12px 10px 10px;
 }
 
 .field-wrapper :deep(.van-cell::after) {
   display: none;
 }
 
-.field-wrapper :deep(.van-field__label) {
-  display: none;
-}
-
 .field-wrapper :deep(.van-field__control) {
-  color: #ffffff;
+  color: #1f2933;
   font-size: 14px;
 }
 
 .field-wrapper :deep(.van-field__control::placeholder) {
-  color: #666666;
+  color: #9aa8ae;
 }
 
 .field-wrapper :deep(.van-field__right-icon) {
-  color: #666666;
-}
-
-.field-arrow {
-  color: #666666;
-  font-size: 12px;
-  margin-right: 12px;
-}
-
-.field-wrapper :deep(.van-field--error) {
-  background: transparent;
+  color: #789099;
 }
 
 .field-wrapper :deep(.van-field__error-message) {
-  color: rgba(248, 113, 113, 0.8);
+  color: #b42318;
+  padding-top: 4px;
   font-size: 12px;
-  padding-top: 2px;
 }
 
-/* ========== 记住密码 & 忘记密码 ========== */
+.field-arrow {
+  margin-right: 14px;
+  color: #789099;
+  font-size: 14px;
+}
+
 .form-extra {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 18px;
-  padding: 0 2px;
+  margin: 18px 0 22px;
 }
 
 .form-extra :deep(.van-checkbox__label) {
-  margin-left: 4px;
-}
-
-.checkbox-text {
-  font-size: 12px;
-  color: #aaaaaa;
-}
-
-.form-extra :deep(.van-checkbox__icon) {
-  background: transparent;
-  border-color: rgba(255, 255, 255, 0.2);
+  margin-left: 6px;
 }
 
 .form-extra :deep(.van-checkbox__icon--checked .van-icon) {
-  background: linear-gradient(135deg, #7c3aed, #4f46e5);
-  border-color: transparent;
+  background: #24675d;
+  border-color: #24675d;
+}
+
+.checkbox-text {
+  font-size: 13px;
+  color: #61747d;
 }
 
 .forgot-link {
-  font-size: 12px;
-  color: #888888;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #24675d;
+  font-size: 13px;
   cursor: pointer;
-  transition: color 0.2s;
 }
 
-.forgot-link:active {
-  color: #c4b5fd;
-}
-
-/* ========== 提交按钮 ========== */
 .submit-btn {
-  background: linear-gradient(135deg, #7c3aed 0%, #6366f1 40%, #4f46e5 70%, #2563eb 100%) !important;
+  height: 46px !important;
   border: none !important;
   border-radius: 8px !important;
-  height: 44px !important;
+  background: #143947 !important;
+  color: #ffffff !important;
   font-size: 15px !important;
-  font-weight: 600 !important;
-  letter-spacing: 4px;
-  box-shadow:
-    0 6px 20px rgba(124, 58, 237, 0.35),
-    0 0 40px rgba(99, 102, 241, 0.1);
-  transition: all 0.3s ease;
-  position: relative;
-  overflow: hidden;
-}
-
-.btn-text {
-  position: relative;
-  z-index: 1;
-}
-
-.btn-shimmer {
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-  animation: shimmer 3s ease-in-out infinite;
-}
-
-@keyframes shimmer {
-  0% { left: -100%; }
-  50% { left: 100%; }
-  100% { left: 100%; }
+  font-weight: 700 !important;
+  box-shadow: 0 12px 24px rgba(20, 57, 71, 0.22);
 }
 
 .submit-btn:active {
-  box-shadow: 0 3px 12px rgba(124, 58, 237, 0.5), 0 0 50px rgba(99, 102, 241, 0.15);
-  transform: scale(0.98);
+  transform: translateY(1px);
+  box-shadow: 0 8px 18px rgba(20, 57, 71, 0.2);
 }
 
-/* ========== 底部通知栏 ========== */
-.bottom-notice {
-  position: absolute;
-  bottom: 44px;
-  left: 16px;
-  right: 16px;
+.agreement-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
-  background: rgba(15, 15, 35, 0.8);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(139, 92, 246, 0.1);
-  border-radius: 8px;
-  padding: 10px 14px;
+  margin-top: 18px;
+  color: #657880;
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.agreement-row :deep(.van-checkbox__icon--checked .van-icon) {
+  background: #24675d;
+  border-color: #24675d;
+}
+
+.agreement-row button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #24675d;
+  font-size: inherit;
+  cursor: pointer;
+}
+
+.project-popup {
+  background: #ffffff;
+}
+
+.project-picker {
+  padding: 22px 20px max(22px, env(safe-area-inset-bottom));
+}
+
+.project-picker-header h3 {
+  margin: 0;
+  color: #12313d;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.project-picker-header p {
+  margin: 8px 0 18px;
+  color: #6d7b82;
+  font-size: 13px;
+}
+
+.project-options {
+  max-height: 280px;
+  overflow-y: auto;
+  border-top: 1px solid #edf1f2;
+}
+
+.project-option {
+  min-height: 48px;
+  padding: 0 2px;
+  border-bottom: 1px solid #edf1f2;
+  color: #24343c;
+  font-size: 14px;
+}
+
+.project-option :deep(.van-checkbox__icon--checked .van-icon) {
+  background: #24675d;
+  border-color: #24675d;
+}
+
+.project-picker-summary {
+  margin: 16px 0;
+  color: #5f7178;
+  font-size: 13px;
+}
+
+.project-picker-actions {
+  display: grid;
+  grid-template-columns: 108px 1fr;
+  gap: 12px;
+}
+
+.project-cancel,
+.project-confirm {
+  height: 44px !important;
+  border-radius: 8px !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+}
+
+.project-cancel {
+  border-color: #d8e1e4 !important;
+  color: #51656d !important;
+}
+
+.project-confirm {
+  border-color: #143947 !important;
+  background: #143947 !important;
+  color: #ffffff !important;
+}
+
+.legal-popup {
+  background: #ffffff;
+}
+
+.legal-document {
+  max-width: 760px;
+  max-height: min(82vh, 720px);
+  margin: 0 auto;
+  padding: 24px 26px max(28px, env(safe-area-inset-bottom));
+  overflow-y: auto;
+  color: #24343c;
+}
+
+.legal-header {
+  position: sticky;
+  top: -24px;
   z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin: -24px -26px 18px;
+  padding: 24px 26px 16px;
+  border-bottom: 1px solid #edf1f2;
+  background: #ffffff;
 }
 
-.notice-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #22c55e;
-  box-shadow: 0 0 6px rgba(34, 197, 94, 0.5);
-  animation: dot-blink 2s ease-in-out infinite;
-  flex-shrink: 0;
+.legal-header h3 {
+  margin: 0;
+  color: #12313d;
+  font-size: 20px;
 }
 
-@keyframes dot-blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
-}
-
-.notice-date {
-  font-size: 12px;
-  color: #aaaaaa;
-  flex-shrink: 0;
-}
-
-.notice-divider {
-  color: rgba(255, 255, 255, 0.15);
+.legal-header p {
+  margin: 7px 0 0;
+  color: #73848c;
   font-size: 12px;
 }
 
-.notice-text {
-  font-size: 12px;
-  color: #aaaaaa;
+.legal-header button {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 6px;
+  background: #f1f5f5;
+  color: #566a72;
+  cursor: pointer;
 }
 
-/* ========== 底部版权 ========== */
+.legal-document section {
+  margin-bottom: 18px;
+}
+
+.legal-document h4 {
+  margin: 0 0 7px;
+  color: #153844;
+  font-size: 14px;
+}
+
+.legal-document section p {
+  margin: 0;
+  color: #53666f;
+  font-size: 13px;
+  line-height: 1.75;
+}
+
+.legal-contact {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 24px;
+  padding: 15px 16px;
+  border-radius: 6px;
+  background: #f2f6f6;
+  color: #3f545c;
+  font-size: 13px;
+}
+
+.legal-contact a {
+  color: #24675d;
+  text-decoration: none;
+}
+
 .footer {
-  position: absolute;
-  bottom: 16px;
-  text-align: center;
+  position: relative;
   z-index: 1;
-  width: 100%;
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  padding: 0 20px 24px;
+  color: #75868d;
+  font-size: 12px;
 }
 
-.footer p {
-  font-size: 11px;
-  color: #555555;
-  letter-spacing: 0.5px;
+.footer a {
+  color: #5d727a;
+  text-decoration: none;
+}
+
+.footer a:hover {
+  color: #24675d;
+}
+
+@media (max-width: 900px) {
+  .topbar {
+    padding: 20px 20px 0;
+  }
+
+  .topbar-meta {
+    display: none;
+  }
+
+  .login-shell {
+    width: calc(100% - 32px);
+    grid-template-columns: 1fr;
+    min-height: 0;
+    margin: 28px auto;
+  }
+
+  .brand-panel {
+    min-height: 230px;
+    padding: 30px 28px;
+  }
+
+  .brand-panel h1 {
+    margin-top: 18px;
+    font-size: 26px;
+  }
+
+  .brand-panel p {
+    font-size: 14px;
+    line-height: 1.7;
+  }
+
+  .panel-visual {
+    display: none;
+  }
+
+  .panel-stats {
+    margin-top: 24px;
+  }
+
+  .auth-card {
+    padding: 32px 24px 28px;
+  }
+
+  .footer {
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .legal-document {
+    padding-right: 20px;
+    padding-left: 20px;
+  }
+
+  .legal-header {
+    margin-right: -20px;
+    margin-left: -20px;
+    padding-right: 20px;
+    padding-left: 20px;
+  }
+}
+
+@media (max-width: 420px) {
+  .login-page {
+    background-size: 40px 40px, 40px 40px, auto;
+  }
+
+  .brand-subtitle,
+  .panel-kicker,
+  .auth-eyebrow,
+  .brand-panel p,
+  .panel-stats {
+    display: none;
+  }
+
+  .login-shell {
+    width: calc(100% - 20px);
+    margin-top: 20px;
+  }
+
+  .brand-panel {
+    min-height: 0;
+    padding: 24px 20px;
+  }
+
+  .brand-panel h1 {
+    margin: 0;
+    font-size: 23px;
+  }
+
+  .auth-heading h2 {
+    font-size: 22px;
+  }
 }
 </style>

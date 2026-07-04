@@ -62,3 +62,8 @@ export function completeRecord(recordId) {
 export function recallModule(recordId) {
   return request.put(`/records/${recordId}/recall`)
 }
+
+// 退回单个检查项（管理员）
+export function recallItem(recordId, itemId) {
+  return request.put(`/records/${recordId}/recall-item`, { item_id: itemId })
+}

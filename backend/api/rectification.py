@@ -117,7 +117,8 @@ async def get_pending_rectifications(
             "review_note": r.review_note or "",
             "ai_result": json.loads(r.ai_result) if r.ai_result else None,
             "ai_checked_at": r.ai_checked_at.isoformat() if r.ai_checked_at else None,
-            "created_at": r.created_at.isoformat()
+            "created_at": r.created_at.isoformat(),
+            "deadline": r.deadline or ""
         })
 
     # 收集所有项目名和模块名（用于前端筛选下拉框）
@@ -173,6 +174,8 @@ async def get_all_rectifications(
     project_name: Optional[str] = None,
     module_name: Optional[str] = None,
     keyword: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 0,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -282,12 +285,23 @@ async def get_all_rectifications(
             "reviewer_name": reviewer_name,
             "reviewed_at": r.reviewed_at.isoformat() if r.reviewed_at else None,
             "submitted_at": r.submitted_at.isoformat() if r.submitted_at else None,
-            "created_at": r.created_at.isoformat()
+            "created_at": r.created_at.isoformat(),
+            "deadline": r.deadline or ""
         })
 
+    total = len(results)
+    # 分页：page_size>0 时返回对应页（移动端 van-list 用），默认0返回全部（PC 行为不变）
+    if page_size and page_size > 0:
+        start = (max(page, 1) - 1) * page_size
+        paged = results[start:start + page_size]
+    else:
+        paged = results
+
     return {
-        "total": len(results),
-        "items": results,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "items": paged,
     }
 
 
@@ -300,11 +314,39 @@ async def export_rectifications_excel(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """导出整改记录为Excel文件，支持与列表相同的筛选条件（按项目隔离）"""
+    """导出整改记录为Excel文件（含高清照片）"""
     from openpyxl import Workbook
     from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    from openpyxl.drawing.image import Image as XlImage
+    from openpyxl.utils import get_column_letter
     from fastapi.responses import StreamingResponse
+    from PIL import Image as PilImage
+    from collections import defaultdict
+    from concurrent.futures import ThreadPoolExecutor
     import io
+
+    MAX_PHOTOS = 5
+    MAX_DISPLAY_W = 300
+    PHOTO_MAX_W = 600
+
+    def compress_photo(photo):
+        """加载照片并压缩为 JPEG，返回可安全复用的图片字节及尺寸。"""
+        if not os.path.exists(photo.file_path):
+            return None
+        try:
+            img = PilImage.open(photo.file_path)
+            if img.mode in ('RGBA', 'P'):
+                img = img.convert('RGB')
+            w, h = img.size
+            if w > PHOTO_MAX_W:
+                ratio = PHOTO_MAX_W / w
+                w, h = PHOTO_MAX_W, int(h * ratio)
+                img = img.resize((w, h), PilImage.LANCZOS)
+            buf = io.BytesIO()
+            img.save(buf, format='JPEG', quality=75)
+            return (photo.photo_id, buf.getvalue(), w, h)
+        except Exception:
+            return None
 
     # 项目级隔离
     project_filter = get_user_project_filter(current_user, db)
@@ -315,16 +357,14 @@ async def export_rectifications_excel(
             headers={"Content-Disposition": "attachment; filename=empty.xlsx"}
         )
 
-    # 复用 /all 端点的查询逻辑
+    # 查询记录
     query = db.query(Rectification).join(InspectionTask)
 
     if project_filter is not None:
         query = query.filter(InspectionTask.project_id.in_(project_filter))
-
     if status_filter:
         statuses = status_filter.split(",")
         query = query.filter(Rectification.status.in_(statuses))
-    # 按项目名筛选（仅管理员/检查员可用）
     if project_name:
         if current_user.role in ("admin", "inspector"):
             proj_ids = [p.id for p in db.query(Project).filter(Project.name == project_name).all()]
@@ -341,12 +381,49 @@ async def export_rectifications_excel(
 
     records = query.order_by(Rectification.created_at.desc()).all()
 
+    # 预过滤（关键词）并收集 issue_id
+    filtered = []
+    for r in records:
+        issue = r.issue
+        task = r.task
+        proj_name = task.project.name if task and task.project else ""
+        mod_name = issue.module_name if issue else ""
+        desc = issue.description if issue else ""
+        item_name = issue.item_name if issue else ""
+        if keyword:
+            kw = keyword.lower()
+            if kw not in proj_name.lower() and kw not in mod_name.lower() and kw not in desc.lower() and kw not in item_name.lower() and kw not in r.task_id.lower():
+                continue
+        filtered.append(r)
+
+    # 批量查询所有照片（一次查询代替 N×2 次）
+    all_issue_ids = [r.issue.issue_id for r in filtered if r.issue]
+    photo_lookup = defaultdict(list)  # (issue_id, photo_type) -> [Photo]
+    if all_issue_ids:
+        all_photos = db.query(Photo).filter(
+            Photo.issue_id.in_(all_issue_ids),
+            Photo.photo_type.in_(["问题照片", "整改照片"])
+        ).all()
+        for p in all_photos:
+            photo_lookup[(p.issue_id, p.photo_type)].append(p)
+        # 每类只取前 MAX_PHOTOS 张
+        for key in photo_lookup:
+            photo_lookup[key] = photo_lookup[key][:MAX_PHOTOS]
+
+    # 并行压缩所有照片
+    flat_photos = [p for plist in photo_lookup.values() for p in plist]
+    photo_buffers = {}  # photo_id -> (bytes, w, h)
+    if flat_photos:
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            for result in pool.map(compress_photo, flat_photos):
+                if result:
+                    photo_buffers[result[0]] = (result[1], result[2], result[3])
+
     # 构建Excel
     wb = Workbook()
     ws = wb.active
     ws.title = "整改记录"
 
-    # 标题样式
     header_font = Font(bold=True, size=11, color="FFFFFF")
     header_fill = PatternFill(start_color="2563EB", end_color="2563EB", fill_type="solid")
     header_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
@@ -358,7 +435,9 @@ async def export_rectifications_excel(
     headers = [
         "序号", "项目", "任务ID", "模块", "检查项", "问题描述", "严重程度",
         "位置", "整改说明", "整改时间", "整改状态",
-        "AI评分", "AI建议", "AI分析", "审核意见", "审核人", "创建时间"
+        "AI评分", "AI建议", "AI分析", "审核意见", "审核人", "创建时间",
+        "检查照片1", "检查照片2", "检查照片3", "检查照片4", "检查照片5",
+        "整改照片1", "整改照片2", "整改照片3", "整改照片4", "整改照片5"
     ]
     ws.append(headers)
 
@@ -374,8 +453,9 @@ async def export_rectifications_excel(
         "ai_approved": "AI通过", "ai_rejected": "AI驳回",
         "approved": "已通过"
     }
+    ws.row_dimensions[1].height = 30
 
-    for idx, r in enumerate(records, 1):
+    for idx, r in enumerate(filtered, 1):
         issue = r.issue
         task = r.task
         proj_name = task.project.name if task and task.project else ""
@@ -386,27 +466,15 @@ async def export_rectifications_excel(
             reviewer = db.query(User).filter(User.id == r.reviewer_id).first()
             reviewer_name = reviewer.real_name if reviewer else ""
 
-        mod_name = issue.module_name if issue else ""
-        desc = issue.description if issue else ""
-        item_name = issue.item_name if issue else ""
-        location = issue.location if issue else ""
-        severity = issue.severity if issue else ""
-
-        # 关键词过滤
-        if keyword:
-            kw = keyword.lower()
-            if kw not in proj_name.lower() and kw not in mod_name.lower() and kw not in desc.lower() and kw not in item_name.lower() and kw not in r.task_id.lower():
-                continue
-
         row_data = [
             idx,
             proj_name,
             r.task_id,
-            mod_name,
-            item_name,
-            desc,
-            severity,
-            location,
+            issue.module_name if issue else "",
+            issue.item_name if issue else "",
+            issue.description if issue else "",
+            issue.severity if issue else "",
+            issue.location if issue else "",
             r.rectification_note or "",
             r.rectification_time or "",
             status_map.get(r.status, r.status),
@@ -416,13 +484,48 @@ async def export_rectifications_excel(
             r.review_note or "",
             reviewer_name,
             r.created_at.strftime("%Y-%m-%d %H:%M") if r.created_at else ""
-        ]
+        ] + [""] * (MAX_PHOTOS * 2)
         ws.append(row_data)
 
+        row_num = idx + 1
+        max_img_h = 0
+
+        if issue:
+            photo_col_starts = {"问题照片": 18, "整改照片": 18 + MAX_PHOTOS}
+            for ptype, start_col in photo_col_starts.items():
+                photos = photo_lookup.get((issue.issue_id, ptype), [])
+                for pi, photo in enumerate(photos):
+                    cached = photo_buffers.get(photo.photo_id)
+                    if not cached:
+                        continue
+                    image_data, orig_w, orig_h = cached
+                    try:
+                        # A workbook can contain the same photo in multiple
+                        # rectification rows; openpyxl closes each image stream
+                        # while saving, so every placement needs its own stream.
+                        xl_img = XlImage(io.BytesIO(image_data))
+                        if orig_w > MAX_DISPLAY_W:
+                            scale = MAX_DISPLAY_W / orig_w
+                            xl_img.width = int(orig_w * scale)
+                            xl_img.height = int(orig_h * scale)
+                        else:
+                            xl_img.width = orig_w
+                            xl_img.height = orig_h
+                        max_img_h = max(max_img_h, xl_img.height)
+                        col_letter = get_column_letter(start_col + pi)
+                        ws.add_image(xl_img, f'{col_letter}{row_num}')
+                    except Exception:
+                        pass
+
+        if max_img_h > 0:
+            ws.row_dimensions[row_num].height = max_img_h * 0.75 + 6
+
     # 设置列宽
-    col_widths = [6, 15, 20, 12, 16, 30, 10, 12, 30, 18, 10, 8, 8, 30, 20, 10, 18]
+    photo_col_w = 28
+    col_widths = [6, 15, 20, 12, 16, 30, 10, 12, 30, 18, 10, 8, 8, 30, 20, 10, 18] + [photo_col_w] * (MAX_PHOTOS * 2)
     for i, w in enumerate(col_widths, 1):
-        ws.column_dimensions[chr(64 + i) if i <= 26 else chr(64 + i // 26) + chr(65 + i % 26)].width = w
+        col_letter = chr(64 + i) if i <= 26 else chr(64 + i // 26) + chr(65 + i % 26)
+        ws.column_dimensions[col_letter].width = w
 
     # 数据行样式
     data_align = Alignment(vertical="center", wrap_text=True)
@@ -572,7 +675,26 @@ async def submit_rectification(
         db.commit()
         logger.info(f"整改提交成功: {rectification_id}")
 
-        # 异步触发 AI 核查
+        # 通知管理员有新的整改提交
+        try:
+            from api.notification import send_notification
+            task = db.query(InspectionTask).filter(InspectionTask.task_id == r.task_id).first()
+            project_name = ""
+            if task:
+                from models.models import Project
+                proj = db.query(Project).filter(Project.id == task.project_id).first()
+                project_name = proj.name if proj else ""
+            admins = db.query(User).filter(User.role == 'admin', User.is_active == True).all()
+            for admin in admins:
+                send_notification(
+                    user_id=admin.id, username=admin.username,
+                    title=f"整改已提交 - {project_name}",
+                    content=f"项目「{project_name}」有新的整改已提交，请及时审核。",
+                    notify_type="rectification_reminder", ref_type="rectification",
+                    ref_id=rectification_id, async_send=True
+                )
+        except Exception as ne:
+            logger.warning(f"整改提交通知发送失败: {ne}")
         _trigger_ai_check(r.rectification_id)
 
         return {
@@ -753,6 +875,44 @@ async def review_rectification(
     r.reviewed_at = datetime.utcnow()
     r.updated_at = datetime.utcnow()
     db.commit()
+
+    # 通知相关人员：审核结果
+    try:
+        from api.notification import send_notification
+        task = db.query(InspectionTask).filter(InspectionTask.task_id == r.task_id).first()
+        project_name = ""
+        project_id = None
+        if task:
+            from models.models import Project
+            proj = db.query(Project).filter(Project.id == task.project_id).first()
+            project_name = proj.name if proj else ""
+            project_id = task.project_id
+
+        # 获取项目关联的驻场经理
+        recipients = set()
+        if project_id:
+            from models.models import UserProject
+            ups = db.query(UserProject).filter(UserProject.project_id == project_id).all()
+            for up in ups:
+                u = db.query(User).filter(User.id == up.user_id, User.role == 'field_supervisor', User.is_active == True).first()
+                if u:
+                    recipients.add((u.id, u.username))
+        # 也通知所有管理员
+        for admin in db.query(User).filter(User.role == 'admin', User.is_active == True).all():
+            recipients.add((admin.id, admin.username))
+
+        notify_type = "rectification_approved" if request.approved else "rectification_rejected"
+        action_text = "已通过" if request.approved else "已驳回"
+        for uid, uname in recipients:
+            send_notification(
+                user_id=uid, username=uname,
+                title=f"整改{action_text} - {project_name}",
+                content=f"项目「{project_name}」的整改记录已由{current_user.real_name or current_user.username}{action_text}。",
+                notify_type=notify_type, ref_type="rectification",
+                ref_id=rectification_id, async_send=True
+            )
+    except Exception as ne:
+        logger.warning(f"整改审核通知发送失败: {ne}")
 
     return {
         "message": "审核完成",

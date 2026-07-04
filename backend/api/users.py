@@ -24,6 +24,7 @@ class UserCreate(BaseModel):
     role: str = "inspector"
     phone: Optional[str] = None
     project_id: Optional[int] = None
+    project_ids: Optional[list] = None
 
 
 class UserUpdate(BaseModel):
@@ -33,6 +34,7 @@ class UserUpdate(BaseModel):
     password: Optional[str] = None
     phone: Optional[str] = None
     project_id: Optional[int] = None
+    project_ids: Optional[list] = None
 
 
 class UserResponse(BaseModel):
@@ -61,13 +63,25 @@ async def list_users(
     current_user: User = Depends(check_role(["admin"]))
 ):
     """获取用户列表（仅管理员）"""
-    from models.models import Project
+    from models.models import Project, UserProject
     from sqlalchemy.orm import joinedload
     query = db.query(User).options(joinedload(User.project))
     if role:
         query = query.filter(User.role == role)
     total = query.count()
     users = query.order_by(User.id).offset((page - 1) * page_size).limit(page_size).all()
+
+    # 批量查询所有用户的项目归属
+    user_ids = [u.id for u in users]
+    user_projects_map = {}
+    user_projects_id_map = {}
+    if user_ids:
+        for uid, pid, pname in db.query(UserProject.user_id, UserProject.project_id, Project.name).join(
+            Project, UserProject.project_id == Project.id
+        ).filter(UserProject.user_id.in_(user_ids)).all():
+            user_projects_map.setdefault(uid, []).append(pname)
+            user_projects_id_map.setdefault(uid, []).append(pid)
+
     return {
         "total": total,
         "items": [
@@ -80,6 +94,8 @@ async def list_users(
                 "is_active": u.is_active,
                 "project_id": u.project_id,
                 "project_name": u.project.name if u.project else None,
+                "project_names": user_projects_map.get(u.id, []),
+                "project_ids": user_projects_id_map.get(u.id, []),
                 "created_at": u.created_at.isoformat() if u.created_at else None
             }
             for u in users
@@ -125,10 +141,13 @@ async def create_user(
     db.refresh(user)
 
     # 同步写入 user_projects 表
-    if req.project_id:
-        from models.models import UserProject
-        db.add(UserProject(user_id=user.id, project_id=req.project_id))
-        db.commit()
+    from models.models import UserProject
+    pids = req.project_ids if req.project_ids else ([req.project_id] if req.project_id else [])
+    for pid in pids:
+        db.add(UserProject(user_id=user.id, project_id=pid))
+    if pids:
+        user.project_id = pids[0]
+    db.commit()
 
     return {"id": user.id, "username": user.username, "message": "用户创建成功"}
 
@@ -166,13 +185,15 @@ async def update_user(
                 raise HTTPException(status_code=400, detail="该手机号已被注册")
         user.phone = req.phone if req.phone else None
 
-    if req.project_id is not None:
-        from models.models import UserProject
-        old_pid = user.project_id
-        user.project_id = req.project_id
-        # 同步更新 user_projects 表（登录和权限过滤依赖此表）
+    # 更新项目归属（project_ids 优先于 project_id）
+    from models.models import UserProject
+    pids = req.project_ids if req.project_ids is not None else ([req.project_id] if req.project_id is not None else None)
+    if pids is not None:
+        # 清除旧关联，写入新关联
         db.query(UserProject).filter(UserProject.user_id == user_id).delete()
-        db.add(UserProject(user_id=user_id, project_id=req.project_id))
+        for pid in pids:
+            db.add(UserProject(user_id=user_id, project_id=pid))
+        user.project_id = pids[0] if pids else None
 
     user.updated_at = datetime.utcnow()
     db.commit()

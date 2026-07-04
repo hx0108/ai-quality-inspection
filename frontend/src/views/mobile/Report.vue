@@ -140,11 +140,12 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { showToast, showSuccessToast } from 'vant'
 import { getReport, getReportStatus, generateReport as apiGenerateReport, downloadReportFile } from '../../api/report'
 import { marked as renderMarkdownSafe } from '../../utils/markdown'
+import { usePolling } from '../../composables/usePolling'
 
 const router = useRouter()
 const route = useRoute()
@@ -163,7 +164,9 @@ const aiFullReport = ref('')
 const activeAnalyses = ref([])
 const activeIssues = ref(['严重', '一般', '轻微'])
 
-let pollTimer = null
+// 统一轮询管理：自动在卸载/路由离开时清理（修复手势返回泄漏）
+// 用箭头包裹延迟求值（pollReportStatus 定义在下方）
+const { start: startPolling, stop: stopPolling } = usePolling(() => pollReportStatus(), { interval: 1500, immediate: false })
 
 const genPercentage = computed(() => {
   const total = genProgress.value.modules_total || 1
@@ -200,7 +203,7 @@ const fetchReport = async () => {
       // 报告不存在，立即开始轮询（不再串行多等一次 getReportStatus）
       generating.value = true
       notFound.value = false
-      pollTimer = setInterval(pollReportStatus, 1500)  // 1.5s 轮询，快速响应
+      startPolling()  // 1.5s 轮询，快速响应
     } else {
       showToast('获取报告失败')
     }
@@ -216,7 +219,7 @@ const startGenerate = async () => {
     generating.value = true
     notFound.value = false
     showSuccessToast('报告生成已启动')
-    pollTimer = setInterval(pollReportStatus, 1500)
+    startPolling()
   } catch (e) {
     showToast(e.response?.data?.detail || '生成报告失败')
   } finally {
@@ -230,13 +233,11 @@ const pollReportStatus = async () => {
     genProgress.value = status
     genStep.value = status.current_step || ''
     if (status.status === 'completed') {
-      clearInterval(pollTimer)
-      pollTimer = null
+      stopPolling()
       generating.value = false
       await fetchReport()
     } else if (status.status === 'failed') {
-      clearInterval(pollTimer)
-      pollTimer = null
+      stopPolling()
       generating.value = false
       showToast('报告生成失败: ' + (status.error || '未知错误'))
       notFound.value = true
@@ -257,10 +258,7 @@ const downloadReport = async (format) => {
 }
 
 const onBack = () => {
-  if (pollTimer) {
-    clearInterval(pollTimer)
-    pollTimer = null
-  }
+  stopPolling()
   router.back()
 }
 
@@ -282,13 +280,6 @@ const getProgressColor = (score) => {
 
 onMounted(() => {
   fetchReport()
-})
-
-onUnmounted(() => {
-  if (pollTimer) {
-    clearInterval(pollTimer)
-    pollTimer = null
-  }
 })
 </script>
 

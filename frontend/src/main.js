@@ -12,6 +12,9 @@ import 'element-plus/dist/index.css'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 
+// 设计系统全局覆盖（原型 all-pages.html → Element Plus）
+import './assets/design-upgrade.css'
+
 const app = createApp(App)
 
 // 注册 Element Plus 图标
