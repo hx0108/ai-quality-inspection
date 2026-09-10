@@ -16,13 +16,10 @@
       @retry-sync="trySyncNow"
     />
 
-    <!-- 顶部进度 -->
-    <div class="progress-header">
-      <div class="progress-info">
-        <span class="progress-count">{{ checkedCount }} / {{ items.length }} 已检查</span>
-        <span class="progress-pct">{{ progress }}%</span>
-      </div>
-      <van-progress :percentage="progress" stroke-width="6" :show-pivot="false" color="#2563eb" />
+    <!-- 顶部进度（原型：细条 + 计数） -->
+    <div class="prog-row">
+      <span class="prog-track"><span class="prog-fill" :style="{ width: progress + '%' }" /></span>
+      <span class="prog-count">{{ checkedCount }} / {{ items.length }}</span>
     </div>
 
     <!-- 加载中 -->
@@ -30,104 +27,48 @@
 
     <!-- 加载错误提示 -->
     <div v-if="fetchError" class="fetch-error-box">
-      <van-icon name="warning-o" size="24" color="#dc2626" />
+      <van-icon name="warning-o" size="24" color="var(--err)" />
       <div class="fetch-error-msg">{{ fetchError }}</div>
       <van-button type="primary" size="small" @click="fetchRecord" style="margin-top: 8px;">重新加载</van-button>
     </div>
 
-    <!-- 卡片容器 -->
+    <!-- 单题卡片（原型结构） -->
     <div v-else-if="currentItem" class="card-container">
-      <div class="item-card" :class="cardClass">
-        <!-- 卡片头部：编号 + 状态 -->
-        <div class="card-top">
-          <span class="card-index">{{ currentIndex + 1 }} / {{ items.length }}</span>
-          <van-tag v-if="currentItem.status === 'checked' && currentItem.qualified && !currentItem.has_issue" type="success" size="medium">✅ 已合格</van-tag>
-          <van-tag v-else-if="currentItem.has_issue" type="danger" size="medium">❌ 有问题</van-tag>
-          <van-tag v-else type="warning" size="medium">待检查</van-tag>
+      <div class="q-card">
+        <!-- 题头：编号 + 模块 + 状态 -->
+        <div class="q-head">
+          <span class="chk-id">{{ currentItem.item_id }}</span>
+          <span class="kt kt-muted">{{ moduleName }}</span>
+          <span v-if="currentItem.has_issue" class="kt kt-err q-status">有问题</span>
+          <span v-else-if="currentItem.status === 'checked' && currentItem.qualified" class="kt kt-ok q-status">已合格</span>
         </div>
+        <h2 class="q-title">{{ currentItem.item_name }}</h2>
+        <div class="q-std">{{ currentItem.check_standard }}</div>
 
-        <!-- 检查项名称 -->
-        <h2 class="item-name">{{ currentItem.item_name }}</h2>
-
-        <!-- 检查标准 -->
-        <div class="standard-box">
-          <div class="standard-label">检查标准</div>
-          <div class="standard-text">{{ currentItem.check_standard }}</div>
-          <div v-if="currentItem.check_method" class="method-row">
-            <span class="method-label">检查方法：</span>{{ currentItem.check_method }}
-          </div>
-          <div v-if="currentItem.scoring_rule" class="method-row">
-            <span class="method-label">评分规则：</span>{{ currentItem.scoring_rule }}
-          </div>
+        <!-- 拍照留证大区（点击直接水印拍摄） -->
+        <div class="q-photo" @click="camRef?.triggerWatermark?.()">
+          <van-icon name="photograph" size="22" />
+          <span>拍照留证（自动加时间地点水印）</span>
         </div>
-
-        <!-- AI 检查提示（可折叠） -->
-        <div v-if="cardGuideTip || _guideModuleTips.length > 0" class="card-guide-section">
-          <div class="card-guide-header" @click="showCardGuide = !showCardGuide">
-            <span class="card-guide-title">AI 检查建议</span>
-            <van-icon :name="showCardGuide ? 'arrow-up' : 'arrow-down'" size="14" />
-          </div>
-          <div v-if="showCardGuide" class="card-guide-area">
-            <!-- 模块级提示（与列表模式完全一致） -->
-            <div v-for="(tip, idx) in _guideModuleTips" :key="idx" class="card-guide-tip">
-              <van-tag :type="tip.type === 'recurring' ? 'danger' : tip.type === 'last_check' ? 'warning' : 'primary'" size="small" class="card-guide-tag">
-                {{ tip.type === 'recurring' ? '反复出现' : tip.type === 'last_check' ? '上次扣分' : tip.type === 'cross_project' ? '共性问题' : '重点关注' }}
-              </van-tag>
-              <span class="card-guide-text">{{ tip.message }}</span>
-              <div v-if="tip.items && tip.items.length" class="card-guide-items">
-                <div v-for="(gi, giIdx) in tip.items.slice(0, 3)" :key="giIdx" class="card-guide-item-row">
-                  <span v-if="gi.item_id" class="card-guide-item-id">{{ gi.item_id }}</span>
-                  <span class="card-guide-item-text">{{ gi.content || gi.item_name || gi.item_id }}</span>
-                  <van-tag v-if="gi.last_score" size="small" type="danger">{{ gi.last_score }}分</van-tag>
-                </div>
-              </div>
-            </div>
-            <!-- 当前检查项的重点提示 -->
-            <div v-if="cardGuideTip" class="card-guide-tip card-guide-item-tip">
-              <van-tag :type="cardGuideTip.type === 'recurring' ? 'danger' : cardGuideTip.type === 'last_check' ? 'warning' : 'primary'" size="small">
-                {{ cardGuideTip.type === 'recurring' ? '反复出现' : cardGuideTip.type === 'last_check' ? '上次扣分' : '提示' }}
-              </van-tag>
-              <span class="card-guide-text">{{ cardGuideTip.message }}</span>
-            </div>
-            <!-- 重点检查项列表（与列表模式一致） -->
-            <div v-if="_guideFocusItems.length > 0" class="card-guide-focus">
-              <div class="card-guide-focus-title">重点检查项：</div>
-              <div v-for="fi in _guideFocusItems.slice(0, 5)" :key="fi.item_id" class="card-guide-focus-item">
-                {{ fi.item_id }} {{ fi.item_name }}
-                <van-tag v-if="fi.priority === 'high'" size="small" type="danger">高</van-tag>
-              </div>
-            </div>
-          </div>
+        <div v-if="issueForm.photos.length" class="q-thumbs">
+          <van-uploader v-model="issueForm.photos" :max-count="5" :show-upload="false" deletable />
         </div>
+        <WatermarkCamera
+          ref="camRef"
+          class="q-cam"
+          :current-count="issueForm.photos.length"
+          :max-count="5"
+          :project-name="projectName"
+          :project-address="projectAddress"
+          :inspector-name="authStore.user.real_name || ''"
+          @photo-added="onPhotoAdded"
+        />
 
-        <!-- ===== 已有问题：展示详情 ===== -->
-        <div v-if="currentItem.has_issue && !showForm" class="issue-display">
-          <div v-for="issue in currentItem.issues" :key="issue.issue_id" class="issue-detail">
-            <div class="issue-severity">
-              <van-tag :type="issue.severity === '严重' ? 'danger' : issue.severity === '轻微' ? 'default' : 'warning'" size="medium">
-                {{ issue.severity || '一般' }}
-              </van-tag>
-            </div>
-            <div class="issue-desc">{{ issue.description }}</div>
-            <div v-if="issue.photos && issue.photos.length" class="issue-photos">
-              <van-image
-                v-for="photo in issue.photos"
-                :key="photo.photo_id"
-                :src="photo.blobUrl"
-                width="72" height="72" fit="cover" radius="6"
-                @click="previewPhoto(issue, photo)"
-              >
-                <template #error><div class="photo-loading">加载中</div></template>
-              </van-image>
-            </div>
-            <div v-if="!isCompleted" class="issue-edit-bar">
-              <van-button size="small" type="primary" plain @click="startEditIssue(issue)">编辑</van-button>
-              <van-button size="small" type="danger" plain @click="onDeleteIssue(currentItem, issue)">删除</van-button>
-            </div>
-          </div>
+        <!-- 有问题 → 红色提示 + 表单 -->
+        <div v-if="showForm" class="m-note q-note-fail">
+          <van-icon name="warning-o" />
+          <span>记录问题：将自动生成整改单并通知责任人</span>
         </div>
-
-        <!-- ===== 问题录入表单 ===== -->
         <div v-if="showForm" class="issue-form">
           <van-field
             v-model="issueForm.description"
@@ -156,55 +97,79 @@
           <van-field
             v-model="issueForm.location"
             label="问题位置"
-            placeholder="如：3栋2单元5楼走廊（选填）"
+            placeholder="位置（选填）"
           />
-          <van-field label="问题照片">
-            <template #input>
-              <WatermarkCamera
-                :current-count="issueForm.photos.length"
-                :max-count="5"
-                :project-name="projectName"
-                :project-address="projectAddress"
-                :inspector-name="authStore.user.real_name || ''"
-                @photo-added="onPhotoAdded"
-              />
-              <van-uploader v-model="issueForm.photos" :max-count="5" :show-upload="false" deletable />
-            </template>
-          </van-field>
           <div class="form-actions">
             <van-button size="small" @click="cancelForm">取消</van-button>
-            <van-button size="small" type="danger" @click="submitIssue" :loading="saving">保存 → 下一项</van-button>
+            <van-button size="small" type="primary" @click="submitIssue" :loading="saving">保存 → 下一项</van-button>
           </div>
         </div>
 
-        <!-- ===== 操作按钮（无问题时显示） ===== -->
-        <div v-if="!currentItem.has_issue && !showForm && !isCompleted" class="action-buttons">
-          <button class="btn-pass" @click="markQualified" :disabled="saving">
-            <span class="btn-icon">✅</span>
-            <span class="btn-text">合格</span>
-          </button>
-          <button class="btn-fail" @click="openForm">
-            <span class="btn-icon">❌</span>
-            <span class="btn-text">有问题</span>
-          </button>
+        <!-- 已有问题：展示详情 -->
+        <div v-if="currentItem.has_issue && !showForm" class="issue-display">
+          <div v-for="issue in currentItem.issues" :key="issue.issue_id" class="issue-detail">
+            <div class="issue-severity">
+              <van-tag :type="issue.severity === '严重' ? 'danger' : issue.severity === '轻微' ? 'default' : 'warning'" size="medium">
+                {{ issue.severity || '一般' }}
+              </van-tag>
+            </div>
+            <div class="issue-desc">{{ issue.description }}</div>
+            <div v-if="issue.photos && issue.photos.length" class="issue-photos">
+              <van-image
+                v-for="photo in issue.photos"
+                :key="photo.photo_id"
+                :src="photo.blobUrl"
+                width="72" height="72" fit="cover" radius="6"
+                @click="previewPhoto(issue, photo)"
+              >
+                <template #error><div class="photo-loading">加载中</div></template>
+              </van-image>
+            </div>
+            <div v-if="!isCompleted" class="issue-edit-bar">
+              <van-button size="small" type="primary" plain @click="startEditIssue(issue)">编辑</van-button>
+              <van-button size="small" type="danger" plain @click="onDeleteIssue(currentItem, issue)">删除</van-button>
+            </div>
+          </div>
         </div>
 
-        <!-- 已完成的项可重新操作 -->
+        <!-- 大按钮：合格 / 有问题（原型 56px 无 emoji） -->
+        <div v-if="!currentItem.has_issue && !showForm && !isCompleted" class="m-check-row big">
+          <button class="m-check-btn pass" :class="{ on: currentItem.status === 'checked' && currentItem.qualified }" @click="markQualified" :disabled="saving">合格</button>
+          <button class="m-check-btn fail" @click="openForm">有问题</button>
+        </div>
+
+        <!-- 撤销合格 -->
         <div v-if="currentItem.qualified && !currentItem.has_issue && !showForm && !isCompleted" class="undo-bar">
           <van-button size="mini" type="default" plain @click="undoQualified(currentItem)">撤销合格</van-button>
         </div>
 
-        <!-- ===== 导航 ===== -->
+        <!-- 导航 -->
         <div class="nav-row">
-          <button class="nav-btn" @click="goPrev" :disabled="currentIndex === 0">
-            ← 上一项
-          </button>
-          <button class="nav-btn" @click="goNextPending" :disabled="checkedCount === items.length">
-            下一项待检 →
-          </button>
-          <button class="nav-btn" @click="goNext" :disabled="currentIndex === items.length - 1">
-            下一项 →
-          </button>
+          <button class="nav-btn" @click="goPrev" :disabled="currentIndex === 0">← 上一项</button>
+          <button class="nav-btn" @click="goNextPending" :disabled="checkedCount === items.length">下一项待检 →</button>
+          <button class="nav-btn" @click="goNext" :disabled="currentIndex === items.length - 1">下一项 →</button>
+        </div>
+
+        <!-- AI 检查建议（默认折叠） -->
+        <div v-if="cardGuideTip || _guideModuleTips.length > 0" class="card-guide-section">
+          <div class="card-guide-header" @click="showCardGuide = !showCardGuide">
+            <span class="card-guide-title">AI 检查建议</span>
+            <van-icon :name="showCardGuide ? 'arrow-up' : 'arrow-down'" size="14" />
+          </div>
+          <div v-if="showCardGuide" class="card-guide-area">
+            <div v-for="(tip, idx) in _guideModuleTips" :key="idx" class="card-guide-tip">
+              <van-tag :type="tip.type === 'recurring' ? 'danger' : tip.type === 'last_check' ? 'warning' : 'primary'" size="small" class="card-guide-tag">
+                {{ tip.type === 'recurring' ? '反复出现' : tip.type === 'last_check' ? '上次扣分' : tip.type === 'cross_project' ? '共性问题' : '重点关注' }}
+              </van-tag>
+              <span class="card-guide-text">{{ tip.message }}</span>
+            </div>
+            <div v-if="cardGuideTip" class="card-guide-tip card-guide-item-tip">
+              <van-tag :type="cardGuideTip.type === 'recurring' ? 'danger' : cardGuideTip.type === 'last_check' ? 'warning' : 'primary'" size="small">
+                {{ cardGuideTip.type === 'recurring' ? '反复出现' : cardGuideTip.type === 'last_check' ? '上次扣分' : '提示' }}
+              </van-tag>
+              <span class="card-guide-text">{{ cardGuideTip.message }}</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -263,7 +228,8 @@ const showForm = ref(false)
 const saving = ref(false)
 const fetchError = ref(null) // 加载错误信息
 const cardGuideTip = ref(null) // 当前卡片的AI提示
-const showCardGuide = ref(true) // 可折叠控制
+const showCardGuide = ref(false) // AI 建议默认折叠（原型）
+const camRef = ref(null) // 水印相机（拍照大区直触）
 // 从共享状态读取引导数据（与列表模式共用）
 const _sharedGuide = getInspectionState(recordId)
 const _guideFocusItems = _sharedGuide.guideFocusItems
@@ -1015,7 +981,7 @@ onMounted(() => fetchRecord())
 /* AI 卡片引导提示（可折叠） */
 .card-guide-section {
   margin: 8px 12px 0;
-  background: linear-gradient(135deg, #eff6ff, #f0fdf4);
+  background: linear-gradient(135deg, var(--blue-bg), var(--ok-bg));
   border-radius: 10px;
   border: 1px solid #bfdbfe;
   overflow: hidden;
@@ -1030,7 +996,7 @@ onMounted(() => fetchRecord())
 .card-guide-title {
   font-size: 13px;
   font-weight: 600;
-  color: #1d4ed8;
+  color: #0c7168;
 }
 .card-guide-area {
   padding: 0 10px 10px;
@@ -1053,7 +1019,7 @@ onMounted(() => fetchRecord())
   font-size: 12px;
 }
 .card-guide-item-tip {
-  background: linear-gradient(135deg, #fef3c7, #fef9c3);
+  background: linear-gradient(135deg, var(--warn-bg), #fdf6dd);
   color: #92400e;
   border: 1px solid #fde68a;
   padding: 6px 10px;
@@ -1076,7 +1042,7 @@ onMounted(() => fetchRecord())
   color: #6b7280;
 }
 .card-guide-item-id {
-  color: #2563eb;
+  color: var(--blue);
   font-weight: 500;
   min-width: 60px;
 }
@@ -1119,7 +1085,7 @@ onMounted(() => fetchRecord())
 .fetch-error-msg {
   margin-top: 8px;
   font-size: 13px;
-  color: #dc2626;
+  color: var(--err);
   line-height: 1.5;
   word-break: break-all;
 }
@@ -1140,123 +1106,156 @@ onMounted(() => fetchRecord())
 }
 
 /* 进度头部 */
-.progress-header {
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-  padding: 14px 16px;
-  color: #fff;
-}
-.progress-info {
+/* ===== 顶部进度（原型：细条 + 计数） ===== */
+.prog-row {
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  margin-bottom: 8px;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 14px 4px;
 }
-.progress-count { font-size: 13px; opacity: 0.85; }
-.progress-pct { font-size: 22px; font-weight: 700; }
+.prog-track {
+  flex: 1;
+  display: block;
+  height: 7px;
+  border-radius: 4px;
+  background: var(--chart-bar-track);
+  overflow: hidden;
+}
+.prog-fill {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--blue);
+  transition: width 0.4s var(--ease);
+}
+.prog-count {
+  font-size: 12.5px;
+  color: var(--ink-500);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 
 /* 卡片容器 */
 .card-container {
   flex: 1;
-  padding: 12px;
+  padding: 12px 14px;
 }
 
-.item-card {
-  background: #fff;
-  border-radius: 14px;
-  padding: 20px 16px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
-  transition: border-color 0.2s;
+/* ===== 单题卡（原型 .q-card） ===== */
+.q-card {
+  background: var(--bg-card);
+  border: 1px solid var(--ink-200);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 14px;
 }
-.item-card.card-pass { border-left: 5px solid #059669; }
-.item-card.card-issue { border-left: 5px solid #dc2626; }
 
-.card-top {
+.q-head {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
-}
-.card-index {
-  font-size: 13px;
-  color: #9ba3af;
-  font-weight: 500;
+  gap: 8px;
+  margin-bottom: 10px;
 }
 
-.item-name {
-  font-size: 20px;
+.chk-id {
+  flex-shrink: 0;
+  font-size: 11px;
   font-weight: 700;
-  color: #1a1d26;
-  margin: 0 0 14px 0;
-  line-height: 1.4;
+  font-family: var(--mono);
+  color: var(--brand-ink);
+  background: var(--blue-bg);
+  border-radius: 5px;
+  padding: 2px 6px;
 }
 
-/* 检查标准 */
-.standard-box {
-  background: #f8fafc;
-  border-radius: 10px;
-  padding: 14px;
-  margin-bottom: 16px;
-  border: 1px solid #e2e8f0;
+.q-status { margin-left: auto; }
+
+.q-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--ink-900);
+  line-height: 1.45;
+  margin: 0 0 8px 0;
+  letter-spacing: -0.3px;
 }
-.standard-label {
-  font-size: 12px;
-  color: #2563eb;
-  font-weight: 600;
-  margin-bottom: 6px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-.standard-text {
-  font-size: 14px;
-  color: #334155;
-  line-height: 1.6;
-  margin-bottom: 8px;
-}
-.method-row {
+
+.q-std {
   font-size: 13px;
-  color: #64748b;
-  line-height: 1.5;
-}
-.method-label {
-  color: #475569;
-  font-weight: 500;
+  color: var(--ink-500);
+  line-height: 1.7;
 }
 
-/* 操作按钮 */
-.action-buttons {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-.btn-pass, .btn-fail {
-  flex: 1;
+/* 拍照留证大区（原型 190px 斜纹占位 → 可点击实拍） */
+.q-photo {
+  height: 190px;
+  margin: 12px -16px 0;
+  border-top: 1px solid var(--ink-100);
+  border-bottom: 1px solid var(--ink-100);
+  background: repeating-linear-gradient(45deg, var(--bg-muted) 0 12px, var(--bg-hover) 12px 24px);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 16px 8px;
-  border-radius: 12px;
-  border: 2px solid;
-  font-size: 14px;
-  font-weight: 600;
+  gap: 8px;
+  color: var(--ink-400);
+  font-size: 12.5px;
   cursor: pointer;
-  transition: all 0.15s;
 }
-.btn-pass {
-  background: #ecfdf5;
-  border-color: #059669;
-  color: #059669;
+
+.q-thumbs { margin-top: 10px; }
+
+.q-cam { margin-top: 10px; }
+
+.q-note-fail {
+  margin-top: 12px;
+  background: var(--err-bg);
+  color: var(--err-strong);
 }
-.btn-pass:active { background: #d1fae5; }
-.btn-fail {
-  background: #fef2f2;
-  border-color: #dc2626;
-  color: #dc2626;
+
+/* 大按钮：合格 / 有问题（原型 56px 无 emoji） */
+.m-check-row.big {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
 }
-.btn-fail:active { background: #fee2e2; }
-.btn-icon { font-size: 24px; }
-.btn-text { font-size: 14px; }
+
+.m-check-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--ink-200);
+  border-radius: var(--r);
+  background: var(--bg-card);
+  font-family: var(--sans);
+  font-weight: 600;
+  color: var(--ink-600);
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.m-check-btn:active { transform: scale(0.98); }
+
+.m-check-row.big .m-check-btn {
+  height: 56px;
+  font-size: 16px;
+  border-radius: var(--r);
+}
+
+.m-check-btn.pass.on,
+.m-check-btn.fail.on { transform: none; }
+
+.m-check-btn.pass.on {
+  background: var(--ok-bg);
+  border-color: var(--ok-border);
+  color: var(--ok-strong);
+}
+
+.m-check-btn.fail.on {
+  background: var(--err-bg);
+  border-color: var(--err-border);
+  color: var(--err-strong);
+}
 
 /* 撤销 */
 .undo-bar {
@@ -1331,8 +1330,8 @@ onMounted(() => fetchRecord())
   transition: all 0.15s;
 }
 .voice-btn.active {
-  background: #2563eb;
-  border-color: #2563eb;
+  background: var(--blue);
+  border-color: var(--blue);
 }
 .voice-btn:disabled {
   opacity: 0.3;
@@ -1340,7 +1339,7 @@ onMounted(() => fetchRecord())
 }
 .voice-hint {
   font-size: 12px;
-  color: #2563eb;
+  color: var(--blue);
   text-align: center;
   padding: 4px 0;
   animation: pulse 1.5s infinite;

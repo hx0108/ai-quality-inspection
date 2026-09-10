@@ -6,13 +6,21 @@
       </template>
     </van-nav-bar>
 
-    <!-- 筛选栏 -->
+    <!-- 筛选栏（原型：下拉 + 状态 chips） -->
     <div class="filter-bar">
-      <van-dropdown-menu active-color="#2563eb">
+      <van-dropdown-menu active-color="var(--blue)">
         <van-dropdown-item v-model="projectFilter" :options="projectOptions" @change="onFilterChange" />
         <van-dropdown-item v-model="moduleFilter" :options="moduleOptions" @change="onFilterChange" />
-        <van-dropdown-item v-model="statusFilter" :options="statusOptions" @change="onFilterChange" />
       </van-dropdown-menu>
+    </div>
+    <div class="status-chips">
+      <button
+        v-for="s in statusChips"
+        :key="s.value"
+        class="chip"
+        :class="{ on: statusFilter === s.value }"
+        @click="statusFilter = s.value; onFilterChange()"
+      >{{ s.label }}</button>
     </div>
 
     <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
@@ -20,157 +28,92 @@
 
       <van-empty v-else-if="!loading && filteredItems.length === 0" description="暂无整改记录" />
 
-      <div v-else class="grouped-list">
-        <!-- 第一层：项目 -->
-        <div
-          v-for="group in groupedItems"
-          :key="group.project_name"
-          class="project-group"
-        >
-          <div class="project-header" @click="toggleProject(group.project_name)">
-            <div class="project-header-left">
-              <van-icon
-                :name="expandedProjects.includes(group.project_name) ? 'arrow-down' : 'arrow'"
-                color="#2563eb"
-                size="14"
-              />
-              <span class="project-name">{{ group.project_name }}</span>
+      <!-- 扁平整改卡（原型 09） -->
+      <div v-else class="flat-list">
+        <div v-for="item in filteredItems" :key="item.rectification_id" class="rc-card">
+          <div class="rc-top">
+            <span class="rc-id">{{ item.rectification_id }}</span>
+            <span class="kt" :class="rectKtClass(item.status)">{{ getStatusText(item.status) }}</span>
+          </div>
+          <div class="rc-desc">{{ item.description }}</div>
+          <div class="rc-meta">
+            <span class="ktag ktag-muted">{{ item.project_name }}</span>
+            <span class="rc-module">{{ item.module_name }}</span>
+            <van-tag plain size="small" :type="item.severity === '严重' ? 'danger' : 'warning'">
+              {{ item.severity }}
+            </van-tag>
+          </div>
+
+          <!-- AI 审核结果 -->
+          <div v-if="item.ai_result" class="ai-result-block">
+            <div class="ai-result-header">
+              <van-icon name="shield-o" color="var(--blue)" />
+              <span class="ai-result-title">AI 核查结果</span>
+              <van-tag :type="item.ai_result.rectification_qualified ? 'success' : 'danger'" size="small">
+                {{ item.ai_result.rectification_qualified ? '通过' : '未通过' }}
+              </van-tag>
             </div>
-            <div class="project-header-right">
-              <span class="project-summary">{{ group.totalModules }}模块 {{ group.totalIssues }}项</span>
-              <span v-if="group.pending" class="project-badge pending">{{ group.pending }}待整改</span>
+            <div class="ai-result-row">
+              <span class="ai-label">置信度</span>
+              <span class="ai-value">{{ item.ai_result.confidence_score || 0 }}分</span>
+            </div>
+            <div v-if="item.ai_result.analysis" class="ai-analysis">{{ item.ai_result.analysis }}</div>
+            <div v-if="item.ai_checked_at" class="ai-time">
+              AI核查时间：{{ formatTime(item.ai_checked_at) }}
             </div>
           </div>
 
-          <!-- 展开的项目体 -->
-          <div v-if="expandedProjects.includes(group.project_name)" class="project-body">
-            <!-- 第二层：模块 -->
-            <div
-              v-for="mod in group.modules"
-              :key="mod.module_name"
-              class="module-group"
-            >
-              <div class="module-header" @click="toggleModule(group.project_name, mod.module_name)">
-                <div class="module-header-left">
-                  <van-icon
-                    :name="isModuleExpanded(group.project_name, mod.module_name) ? 'arrow-down' : 'arrow'"
-                    color="#64748b"
-                    size="12"
-                  />
-                  <span class="module-name">{{ mod.module_name }}</span>
-                </div>
-                <div class="module-header-right">
-                  <span class="module-count">{{ mod.items.length }}项</span>
-                  <span v-if="mod.pending" class="module-badge">{{ mod.pending }}待整改</span>
-                </div>
-              </div>
+          <!-- 驳回原因 -->
+          <div v-if="item.status === 'pending' && item.review_note" class="rect-reject-reason">
+            <van-icon name="warning-o" color="var(--err)" />
+            <span>驳回原因：{{ item.review_note }}</span>
+          </div>
 
-              <!-- 展开的模块体：整改条目 -->
-              <div v-if="isModuleExpanded(group.project_name, mod.module_name)" class="module-body">
-                <div
-                  v-for="item in mod.items"
-                  :key="item.rectification_id"
-                  class="rect-card"
-                >
-                  <div class="rect-top-row">
-                    <span class="rect-desc-brief">{{ item.description }}</span>
-                    <van-tag :type="getStatusType(item.status)" size="small">{{ getStatusText(item.status) }}</van-tag>
-                  </div>
-                  <div class="rect-meta">
-                    <span>{{ item.check_date }}</span>
-                    <van-tag plain size="small" :type="item.severity === '严重' ? 'danger' : 'warning'">
-                      {{ item.severity }}
-                    </van-tag>
-                    <span v-if="item.deadline" class="rect-deadline" :class="{ 'rect-overdue': isOverdue(item.deadline), 'rect-expiring': isExpiring(item.deadline) }">
-                      截止 {{ item.deadline }}
-                    </span>
-                  </div>
-
-                  <!-- AI 审核结果 -->
-                  <div v-if="item.ai_result" class="ai-result-block">
-                    <div class="ai-result-header">
-                      <van-icon name="shield-o" color="#2563eb" />
-                      <span class="ai-result-title">AI 核查结果</span>
-                      <van-tag :type="item.ai_result.rectification_qualified ? 'success' : 'danger'" size="small">
-                        {{ item.ai_result.rectification_qualified ? '通过' : '未通过' }}
-                      </van-tag>
-                    </div>
-                    <div class="ai-result-row">
-                      <span class="ai-label">置信度</span>
-                      <span class="ai-value">{{ item.ai_result.confidence_score || 0 }}分</span>
-                    </div>
-                    <div v-if="item.ai_result.analysis" class="ai-analysis">{{ item.ai_result.analysis }}</div>
-                    <div v-if="item.ai_result.watermark_valid !== undefined" class="ai-result-row">
-                      <span class="ai-label">水印验证</span>
-                      <van-tag :type="item.ai_result.watermark_valid ? 'success' : 'danger'" plain size="small">
-                        {{ item.ai_result.watermark_valid ? '有效' : '无效' }}
-                      </van-tag>
-                    </div>
-                    <div v-if="item.ai_result.suggestion" class="ai-result-row">
-                      <span class="ai-label">建议</span>
-                      <van-tag :type="item.ai_result.suggestion === '通过' ? 'success' : 'danger'" plain size="small">
-                        {{ item.ai_result.suggestion }}
-                      </van-tag>
-                    </div>
-                    <div v-if="item.ai_checked_at" class="ai-time">
-                      AI核查时间：{{ formatTime(item.ai_checked_at) }}
-                    </div>
-                  </div>
-
-                  <!-- 驳回原因（人工驳回后 status 会重置为 pending，但保留 review_note） -->
-                  <div v-if="item.status === 'pending' && item.review_note" class="rect-reject-reason">
-                    <van-icon name="warning-o" color="#ee0a24" />
-                    <span>驳回原因：{{ item.review_note }}</span>
-                  </div>
-
-                  <!-- 操作按钮 -->
-                  <div class="rect-actions">
-                    <van-button
-                      v-if="item.status === 'pending'"
-                      type="primary"
-                      size="small"
-                      round
-                      icon="photograph"
-                      @click="goSubmit(item)"
-                    >
-                      {{ item.review_note ? '重新整改' : '上传整改' }}
-                    </van-button>
-                    <van-button
-                      v-if="item.status === 'ai_rejected' && authStore.isProjectStaff"
-                      type="warning"
-                      size="small"
-                      round
-                      plain
-                      @click="openAppeal(item)"
-                    >
-                      申诉
-                    </van-button>
-                    <van-button
-                      plain
-                      type="primary"
-                      size="small"
-                      round
-                      icon="eye-o"
-                      @click="goDetail(item)"
-                    >
-                      查看详情
-                    </van-button>
-                  </div>
-                </div>
-              </div>
+          <div class="rc-foot">
+            <span
+              v-if="item.deadline"
+              class="rc-due"
+              :class="{ 'rect-overdue': isOverdue(item.deadline), 'rect-expiring': isExpiring(item.deadline) }"
+            >期限 {{ item.deadline }}</span>
+            <span v-else class="rc-due">期限 —</span>
+            <div class="rc-acts">
+              <van-button
+                v-if="item.status === 'pending'"
+                type="primary"
+                size="small"
+                round
+                icon="photograph"
+                @click="goSubmit(item)"
+              >
+                {{ item.review_note ? '重新整改' : '上传整改' }}
+              </van-button>
+              <van-button
+                v-if="item.status === 'ai_rejected' && authStore.isProjectStaff"
+                type="warning"
+                size="small"
+                round
+                plain
+                @click="openAppeal(item)"
+              >
+                申诉
+              </van-button>
+              <van-button
+                plain
+                type="primary"
+                size="small"
+                round
+                icon="eye-o"
+                @click="goDetail(item)"
+              >
+                详情
+              </van-button>
             </div>
           </div>
         </div>
       </div>
     </van-pull-refresh>
 
-    <van-tabbar v-model="activeTab" route>
-      <van-tabbar-item icon="chart-trending-o" to="/dashboard">概览</van-tabbar-item>
-      <van-tabbar-item icon="home-o" to="/tasks">任务</van-tabbar-item>
-      <van-tabbar-item icon="todo-list-o" to="/reports">报告</van-tabbar-item>
-      <van-tabbar-item icon="shield-o" to="/rectification">整改</van-tabbar-item>
-      <van-tabbar-item icon="bar-chart-o" to="/analysis-mobile">分析</van-tabbar-item>
-    </van-tabbar>
+    <MobileTabbar />
 
     <MobileUserSheet v-model:show="showUser" />
 
@@ -201,12 +144,12 @@ import { useRouter } from 'vue-router'
 import { showToast, showSuccessToast } from 'vant'
 import { useAuthStore } from '../../stores/auth'
 import MobileUserSheet from '../../components/MobileUserSheet.vue'
+import MobileTabbar from '../../components/MobileTabbar.vue'
 import { getPendingRectifications, appealRectification } from '../../api/rectification'
 
 const router = useRouter()
 const authStore = useAuthStore()
 
-const activeTab = ref(3)
 const showUser = ref(false)
 const showAppealDialog = ref(false)
 const appealNote = ref('')
@@ -251,14 +194,30 @@ const isModuleExpanded = (projectName, moduleName) => {
   return expandedModules.value[projectName]?.includes(moduleName) ?? false
 }
 
-const statusOptions = [
-  { text: '全部状态', value: '' },
-  { text: '待整改', value: 'pending' },
-  { text: 'AI通过', value: 'ai_approved' },
-  { text: 'AI驳回', value: 'ai_rejected' },
-  { text: '待审核', value: 'pending_review' },
-  { text: '已通过', value: 'approved' }
+// 状态筛选 chips（原型形态）
+const statusChips = [
+  { label: '全部', value: '' },
+  { label: '待整改', value: 'pending' },
+  { label: 'AI驳回', value: 'ai_rejected' },
+  { label: '待审核', value: 'pending_review' },
+  { label: 'AI通过', value: 'ai_approved' },
+  { label: '已通过', value: 'approved' }
 ]
+
+// 状态 → 芯片语义色
+const rectKtClass = (status) => {
+  const map = {
+    pending: 'kt-muted',
+    submitted: 'kt-warn',
+    pending_review: 'kt-warn',
+    approved: 'kt-ok',
+    ai_approved: 'kt-ok',
+    ai_rejected: 'kt-err',
+    rejected: 'kt-err',
+    disputed: 'kt-brand'
+  }
+  return map[status] || 'kt-muted'
+}
 
 const projectOptions = computed(() => {
   const projects = [...new Set(items.value.map(i => i.project_name).filter(Boolean))].sort()
@@ -338,18 +297,6 @@ const onFilterChange = () => {
       }
     }
   }
-}
-
-const getStatusType = (status) => {
-  const map = {
-    pending: 'warning',
-    submitted: 'primary',
-    ai_approved: 'success',
-    ai_rejected: 'danger',
-    pending_review: 'warning',
-    approved: 'success'
-  }
-  return map[status] || 'default'
 }
 
 const getStatusText = (status) => {
@@ -502,7 +449,7 @@ onMounted(fetchData)
 
 .project-badge.pending {
   background: #fef3c7;
-  color: #d97706;
+  color: var(--orange);
 }
 
 .project-body {
@@ -549,7 +496,7 @@ onMounted(fetchData)
 
 .module-badge {
   font-size: 11px;
-  color: #d97706;
+  color: var(--orange);
 }
 
 .module-body {
@@ -680,4 +627,101 @@ onMounted(fetchData)
   border-top: 1px solid #f0f0f0;
 }
 
+/* ===== 原型形态：状态 chips + 扁平整改卡 ===== */
+.status-chips {
+  display: flex;
+  gap: 6px;
+  padding: 8px 14px 2px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.status-chips::-webkit-scrollbar { display: none; }
+
+.chip {
+  flex-shrink: 0;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--ink-200);
+  background: var(--bg-card);
+  font-family: var(--sans);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-600);
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.chip.on {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: #fff;
+  font-weight: 600;
+}
+
+.flat-list { padding: 10px 14px; }
+
+.rc-card {
+  background: var(--bg-card);
+  border: 1px solid var(--ink-200);
+  border-radius: 12px;
+  padding: 13px 14px;
+  margin-bottom: 10px;
+}
+
+.rc-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.rc-id {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-400);
+}
+
+.rc-desc {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-900);
+  margin-top: 7px;
+  line-height: 1.5;
+}
+
+.rc-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.rc-module {
+  font-size: 12px;
+  color: var(--ink-500);
+}
+
+.rc-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 11px;
+}
+
+.rc-due {
+  font-size: 12px;
+  color: var(--ink-500);
+  font-variant-numeric: tabular-nums;
+}
+
+.rc-due.rect-overdue { color: var(--err-strong); font-weight: 700; }
+.rc-due.rect-expiring { color: var(--warn-strong); font-weight: 600; }
+
+.rc-acts {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
 </style>

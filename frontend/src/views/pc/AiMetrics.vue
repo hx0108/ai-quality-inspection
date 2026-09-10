@@ -339,19 +339,19 @@ function renderTrendChart() {
       {
         name: '一致性率', type: 'line', smooth: true,
         data: trendData.value.map(d => d.consistency_rate),
-        itemStyle: { color: '#2563eb' },
-        areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(37,99,235,0.15)' }, { offset: 1, color: 'rgba(37,99,235,0.01)' }] } },
+        itemStyle: { color: '#0f8a80' },
+        areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(15,138,128,0.15)' }, { offset: 1, color: 'rgba(15,138,128,0.01)' }] } },
       },
       {
         name: '降级率', type: 'line', smooth: true,
         data: trendData.value.map(d => d.fallback_rate),
-        itemStyle: { color: '#ca8a04' },
+        itemStyle: { color: '#b07a12' },
         lineStyle: { type: 'dashed' },
       },
       {
         name: '平均置信度', type: 'line', smooth: true, yAxisIndex: 1,
         data: trendData.value.map(d => d.avg_confidence),
-        itemStyle: { color: '#16a34a' },
+        itemStyle: { color: '#35a398' },
       },
     ],
   })
@@ -362,9 +362,9 @@ function renderConfidencePie() {
   confidencePieChart = echarts.init(confidencePieRef.value)
   const dist = calibrationData.value.distribution || {}
   const data = [
-    { value: dist.high || 0, name: '高置信度(≥0.8)', itemStyle: { color: '#2563eb' } },
-    { value: dist.medium || 0, name: '中置信度(0.5-0.8)', itemStyle: { color: '#ca8a04' } },
-    { value: dist.low || 0, name: '低置信度(<0.5)', itemStyle: { color: '#dc2626' } },
+    { value: dist.high || 0, name: '高置信度(≥0.8)', itemStyle: { color: '#0f8a80' } },
+    { value: dist.medium || 0, name: '中置信度(0.5-0.8)', itemStyle: { color: '#b07a12' } },
+    { value: dist.low || 0, name: '低置信度(<0.5)', itemStyle: { color: '#e5484d' } },
   ]
   const total = data.reduce((s, d) => s + d.value, 0)
   confidencePieChart.setOption({
@@ -382,8 +382,7 @@ function renderModuleBar() {
   if (!moduleBarRef.value || moduleStats.value.length === 0) return
   moduleBarChart = echarts.init(moduleBarRef.value)
   const sorted = [...moduleStats.value].sort((a, b) => a.consistency_rate - b.consistency_rate)
-  // 每个模块固定分配独立颜色（8色循环），保证各模块颜色都不同，便于区分
-  const palette = ['#2563eb', '#16a34a', '#ca8a04', '#dc2626', '#7c3aed', '#0891b2', '#db2777', '#ea580c']
+  // 一致率是单一度量：语义色编码（<90% 关注，其余品牌色），不再用彩虹色区分模块
   moduleBarChart.setOption({
     tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
     grid: { top: 10, bottom: 30, left: 100, right: 40 },
@@ -391,14 +390,14 @@ function renderModuleBar() {
     yAxis: { type: 'category', data: sorted.map(m => m.module_name), axisLabel: { fontSize: 12 } },
     series: [{
       type: 'bar', barWidth: 18,
-      data: sorted.map((m, idx) => ({
+      data: sorted.map((m) => ({
         value: m.consistency_rate,
         itemStyle: {
-          color: palette[idx % palette.length],
+          color: m.consistency_rate < 90 ? '#b07a12' : '#0f8a80',
           borderRadius: [0, 4, 4, 0],
         },
       })),
-      label: { show: true, position: 'right', formatter: '{c}%', fontSize: 11, color: '#475569' },
+      label: { show: true, position: 'right', formatter: '{c}%', fontSize: 11, color: '#61616d' },
     }],
   })
 }
@@ -411,14 +410,13 @@ function renderRadarChart() {
 
   if (moduleDevs.length === 0) {
     radarChart.setOption({
-      title: { text: '暂无偏差数据', left: 'center', top: 'center', textStyle: { color: '#a1a1aa', fontSize: 14 } },
+      title: { text: '暂无偏差数据', left: 'center', top: 'center', textStyle: { color: '#a4a4af', fontSize: 14 } },
     })
     return
   }
 
-  // 偏差用柱状图展示（雷达图在小偏差数据下几乎不可见），按偏差降序
+  // 偏差用柱状图展示（雷达图在小偏差数据下几乎不可见），按偏差降序；最大偏差标红，其余中性
   const sorted = [...moduleDevs].sort((a, b) => b.deviation - a.deviation)
-  const palette = ['#dc2626', '#ea580c', '#ca8a04', '#84cc16', '#16a34a', '#0891b2', '#2563eb', '#7c3aed']
   radarChart.setOption({
     tooltip: {
       trigger: 'axis', axisPointer: { type: 'shadow' },
@@ -434,9 +432,9 @@ function renderRadarChart() {
       type: 'bar', barWidth: 18,
       data: sorted.map((m, idx) => ({
         value: m.deviation,
-        itemStyle: { color: palette[idx % palette.length], borderRadius: [0, 4, 4, 0] },
+        itemStyle: { color: idx === 0 ? '#e5484d' : '#c9c9d1', borderRadius: [0, 4, 4, 0] },
       })),
-      label: { show: true, position: 'right', formatter: '{c}', fontSize: 11, color: '#475569' },
+      label: { show: true, position: 'right', formatter: '{c}', fontSize: 11, color: '#61616d' },
     }],
   })
 }
@@ -461,18 +459,18 @@ function renderCalibrationBar() {
         name: '样本数', type: 'bar', yAxisIndex: 0, barWidth: 30,
         data: cal.map(c => ({
           value: c.count,
-          itemStyle: { color: 'rgba(148,163,184,0.3)', borderRadius: [4, 4, 0, 0] },
+          itemStyle: { color: 'rgba(132,132,143,0.25)', borderRadius: [4, 4, 0, 0] },
         })),
-        label: { show: true, position: 'top', formatter: '{c}条', fontSize: 10, color: '#a1a1aa' },
+        label: { show: true, position: 'top', formatter: '{c}条', fontSize: 10, color: '#a4a4af' },
         z: 1,
       },
       {
         name: '实际一致率', type: 'line', smooth: true,
         data: cal.map(c => c.actual_consistency_rate),
-        itemStyle: { color: '#2563eb' },
+        itemStyle: { color: '#0f8a80' },
         lineStyle: { width: 3 },
         symbol: 'circle', symbolSize: 10,
-        label: { show: true, position: 'top', formatter: '{c}%', fontSize: 12, color: '#18181b', fontWeight: 600 },
+        label: { show: true, position: 'top', formatter: '{c}%', fontSize: 12, color: '#2c2c38', fontWeight: 600 },
         z: 2,
       },
     ],
@@ -545,24 +543,6 @@ onUnmounted(() => {
 }
 
 /* ===== Page header — prototype .phdr ===== */
-.phdr {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  margin-bottom: 20px;
-}
-.phdr h1 {
-  font-size: 22px;
-  font-weight: 800;
-  color: var(--ink-900);
-  letter-spacing: -0.4px;
-  margin: 0;
-}
-.phdr-sub {
-  font-size: 13px;
-  color: var(--ink-400);
-  margin-top: 3px;
-}
 
 /* ===== Filter bar — prototype .filters ===== */
 .filters {
@@ -603,58 +583,6 @@ onUnmounted(() => {
 }
 
 /* ===== KPI row — prototype ===== */
-.kpi-row {
-  display: grid;
-  gap: 12px;
-  margin-bottom: 20px;
-}
-.kpi-row.cols-6 {
-  grid-template-columns: repeat(6, 1fr);
-}
-.kpi {
-  background: var(--bg-card);
-  border: 1px solid var(--ink-100);
-  border-radius: var(--r-lg);
-  padding: 18px 20px;
-  cursor: default;
-  transition: all 0.15s var(--ease);
-  animation: kpiIn 0.3s var(--ease) both;
-}
-.kpi:nth-child(2) { animation-delay: 30ms; }
-.kpi:nth-child(3) { animation-delay: 60ms; }
-.kpi:nth-child(4) { animation-delay: 90ms; }
-.kpi:nth-child(5) { animation-delay: 120ms; }
-.kpi:nth-child(6) { animation-delay: 150ms; }
-.kpi:hover {
-  border-color: var(--ink-200);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-}
-.kpi-lbl {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink-400);
-  margin-bottom: 6px;
-}
-.kpi-num {
-  font-family: var(--mono);
-  font-size: 32px;
-  font-weight: 700;
-  color: var(--ink-900);
-  line-height: 1;
-  margin-bottom: 6px;
-  letter-spacing: -1.5px;
-}
-.kpi-unit {
-  font-size: 16px;
-  font-weight: 500;
-  color: var(--ink-400);
-  letter-spacing: 0;
-}
-.kpi-tags {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
 
 /* ===== KPI tags — prototype .kt ===== */
 .kt {
@@ -814,18 +742,12 @@ onUnmounted(() => {
 
 /* ===== Responsive ===== */
 @media (max-width: 1200px) {
-  .kpi-row.cols-6 {
-    grid-template-columns: repeat(3, 1fr);
-  }
   .charts {
     grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 900px) {
-  .kpi-row.cols-6 {
-    grid-template-columns: repeat(2, 1fr);
-  }
 }
 
 /* ===== 智能诊断区 ===== */
@@ -842,38 +764,38 @@ onUnmounted(() => {
   padding: 12px 14px; margin-top: 12px; background: var(--bg-muted, #f8fafc);
   border-radius: 0 8px 8px 0;
 }
-.dx-item.dx-高 { border-left-color: #dc2626; background: #fef2f2; }
-.dx-item.dx-中 { border-left-color: #ca8a04; background: #fffbeb; }
+.dx-item.dx-高 { border-left-color: var(--err); background: var(--err-bg); }
+.dx-item.dx-中 { border-left-color: var(--warn); background: var(--warn-bg); }
 .dx-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 .dx-sev {
   font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px;
 }
-.dx-sev.sev-高 { background: #fee2e2; color: #dc2626; }
-.dx-sev.sev-中 { background: #fef3c7; color: #ca8a04; }
-.dx-sev.sev-低 { background: #f1f5f9; color: #64748b; }
-.dx-module { font-size: 14px; font-weight: 700; color: var(--ink-900, #18181b); }
+.dx-sev.sev-高 { background: var(--err-bg); color: var(--err-strong); }
+.dx-sev.sev-中 { background: var(--warn-bg); color: var(--warn-strong); }
+.dx-sev.sev-低 { background: var(--bg-muted); color: var(--ink-500); }
+.dx-module { font-size: 14px; font-weight: 700; color: var(--ink-900, #191922); }
 .dx-pattern {
-  font-size: 11px; color: #64748b; background: #fff; padding: 2px 8px;
-  border-radius: 10px; border: 1px solid var(--ink-100, #f1f5f9);
+  font-size: 11px; color: var(--ink-500); background: var(--bg-card); padding: 2px 8px;
+  border-radius: 10px; border: 1px solid var(--ink-100);
 }
-.dx-problem { font-size: 13px; color: var(--ink-900, #18181b); margin-bottom: 4px; }
-.dx-rootcause { font-size: 12px; color: #475569; line-height: 1.5; margin-bottom: 6px; }
+.dx-problem { font-size: 13px; color: var(--ink-900, #191922); margin-bottom: 4px; }
+.dx-rootcause { font-size: 12px; color: var(--ink-600); line-height: 1.5; margin-bottom: 6px; }
 .dx-suggestion {
-  font-size: 12px; color: #18181b; line-height: 1.5; margin-bottom: 6px;
-  background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 6px 10px;
+  font-size: 12px; color: var(--ink-800); line-height: 1.5; margin-bottom: 6px;
+  background: var(--ok-bg); border: 1px solid #b9e2cc; border-radius: 6px; padding: 6px 10px;
 }
 .dx-action {
   font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 4px;
-  margin-right: 6px; background: #2563eb; color: #fff;
+  margin-right: 6px; background: var(--blue); color: #fff;
 }
-.dx-action.act-adjust_threshold { background: #0891b2; }
-.dx-action.act-refine_prompt { background: #7c3aed; }
-.dx-action.act-add_edge_case { background: #16a34a; }
-.dx-impact { font-size: 11px; color: #16a34a; margin-top: 4px; }
-.dx-evidence { font-size: 11px; color: #64748b; display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
-.dx-evi-label { color: #94a3b8; }
+.dx-action.act-adjust_threshold { background: #35a398; }
+.dx-action.act-refine_prompt { background: #474753; }
+.dx-action.act-add_edge_case { background: var(--ok); }
+.dx-impact { font-size: 11px; color: var(--ok-strong); margin-top: 4px; }
+.dx-evidence { font-size: 11px; color: var(--ink-500); display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+.dx-evi-label { color: var(--ink-400); }
 .dx-chip {
-  background: #fff; border: 1px solid var(--ink-100, #e2e8f0);
-  padding: 1px 7px; border-radius: 4px; color: #475569;
+  background: var(--bg-card); border: 1px solid var(--ink-100);
+  padding: 1px 7px; border-radius: 4px; color: var(--ink-600);
 }
 </style>

@@ -118,3 +118,29 @@ def get_user_project_filter(current_user, db=None):
             return [current_user.project_id]
         return get_user_project_ids(current_user, db)
     return []
+
+
+def apply_task_visibility(query, current_user, db):
+    """Apply the same task visibility rules used by the task center.
+
+    Keeping this in one place prevents list, detail and export endpoints from
+    drifting into different authorization behavior.
+    """
+    from models.models import InspectionTask, TaskAssignment
+
+    if current_user.role in ("field_supervisor", "project_staff"):
+        project_ids = get_user_project_ids(current_user, db)
+        if not project_ids:
+            return query.filter(InspectionTask.id == -1)
+        return query.filter(InspectionTask.project_id.in_(project_ids))
+
+    if current_user.role == "inspector":
+        assigned_task_ids = db.query(TaskAssignment.task_id).filter(
+            TaskAssignment.inspector_id == current_user.id
+        )
+        return query.filter(InspectionTask.task_id.in_(assigned_task_ids))
+
+    if current_user.role in ("admin", "site_supervisor"):
+        return query
+
+    return query.filter(InspectionTask.id == -1)

@@ -59,6 +59,7 @@
             <td style="text-align:left;font-family:var(--sans);font-weight:600;color:var(--ink-900)">{{ row.project_name || '-' }}</td>
             <td>
               <span v-if="row.standard_type === 'diecheng'" class="kt kt-blue">蝶城</span>
+              <span v-else-if="row.standard_type === 'lizhi'" class="kt kt-lizhi">砺质</span>
               <span v-else class="kt kt-warn">非蝶城</span>
             </td>
             <td>
@@ -312,10 +313,6 @@ onMounted(() => fetchReports())
 .page.on { animation: pgIn .25s var(--ease); }
 
 /* ===== Page header ===== */
-.phdr { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 20px; }
-.phdr h1 { font-size: 22px; font-weight: 800; color: var(--ink-900); letter-spacing: -.4px; margin: 0; }
-.phdr-sub { font-size: 13px; color: var(--ink-400); margin-top: 3px; }
-.phdr-acts { display: flex; gap: 8px; }
 
 /* ===== Filter bar ===== */
 .filters { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
@@ -348,6 +345,7 @@ onMounted(() => fetchReports())
 .kt-teal { background: var(--teal-50); color: var(--teal-700); }
 .kt-muted { background: var(--bg-muted); color: var(--ink-600); }
 .kt-blue { background: var(--blue-bg); color: var(--blue); }
+.kt-lizhi { background: var(--bg-muted); color: var(--ink-700); }
 
 /* ===== Score pills ===== */
 .sp { display: inline-block; min-width: 32px; padding: 2px 6px; border-radius: 3px; font-family: var(--mono); font-size: 13px; font-weight: 700; text-align: center; }

@@ -5,7 +5,7 @@
 
     <div class="form-card">
       <div class="form-icon">
-        <van-icon name="lock" size="40" color="#2563eb" />
+        <van-icon name="lock" size="40" color="var(--blue)" />
       </div>
       <h2>修改密码</h2>
       <p class="form-desc">首次登录请修改初始密码</p>
@@ -149,7 +149,7 @@ onUnmounted(() => {
 
 .pwd-tip {
   text-align: center;
-  color: #2563eb;
+  color: var(--blue);
   font-size: 12px;
   margin-bottom: 24px;
   font-weight: 500;
@@ -161,7 +161,7 @@ onUnmounted(() => {
 }
 
 .form-buttons .van-button--primary {
-  background: #2563eb;
+  background: var(--blue);
   border: none;
   height: 44px;
   font-size: 16px;

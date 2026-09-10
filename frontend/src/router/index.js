@@ -156,7 +156,7 @@ const routes = [
 ]
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHistory(import.meta.env.BASE_URL),
   routes
 })
 
@@ -228,5 +228,11 @@ function isMobile() {
   return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
     || window.innerWidth < 768
 }
+
+// 移动端路由标记：桌面宽屏下把移动页收进居中手机栏（样式见 App.vue 全局块）
+router.afterEach((to) => {
+  const isPcRoute = to.path.startsWith('/pc')
+  document.body.classList.toggle('mobile-route', !isPcRoute)
+})
 
 export default router

@@ -786,35 +786,42 @@ async def get_dashboard_stats(
         ScoringResult.module_name
     ).all()
 
-    # 按任务计算加权总分
+    # 按任务汇总各模块得分（用于模块明细展示）
     task_month = {}
     task_modules = defaultdict(dict)
     for row in scoring_rows:
         task_month[row.task_id] = row.month
         task_modules[row.task_id][row.module_name] = float(row.module_score)
 
+    # 任务总分直接取已存储的 total_score（已按各标准计分模型正确计算：蝶城=加权、砺质=封顶+扣分）
+    task_meta = {}
+    _tasks_in_range = db.query(
+        InspectionTask.task_id,
+        InspectionTask.total_score,
+        InspectionTask.standard_type,
+        func.strftime('%Y-%m', InspectionTask.created_at).label('month'),
+    ).filter(InspectionTask.created_at >= six_months).all()
+    for t in _tasks_in_range:
+        task_meta[t.task_id] = {
+            "total": float(t.total_score) if t.total_score is not None else None,
+            "std": t.standard_type or "diecheng",
+            "month": t.month,
+        }
+
     monthly_scores = defaultdict(list)
-    for task_id, modules in task_modules.items():
-        total = sum(
-            modules.get(mname, 0) * mweight
-            for mname, mweight in settings.MODULE_WEIGHTS.items()
-        )
-        monthly_scores[task_month[task_id]].append(round(total, 1))
+    task_total_scores = {}
+    for task_id in task_modules:  # 仅统计有评分结果的任务
+        meta = task_meta.get(task_id)
+        if meta and meta["total"] is not None:
+            monthly_scores[meta["month"]].append(round(meta["total"], 1))
+            task_total_scores[task_id] = round(meta["total"], 1)
 
     trend_result = [
         {"month": m, "avg_score": round(sum(s) / len(s), 1), "task_count": len(s)}
         for m, s in sorted(monthly_scores.items()) if s
     ]
 
-    # 各项目最新得分 —— 同样从 ScoringResult 计算
-    # 获取每个任务的加权总分
-    task_total_scores = {}
-    for task_id, modules in task_modules.items():
-        total = sum(
-            modules.get(mname, 0) * mweight
-            for mname, mweight in settings.MODULE_WEIGHTS.items()
-        )
-        task_total_scores[task_id] = round(total, 1)
+    # 各项目最新得分 —— 使用已存储的 total_score
 
     # 查找每个项目最新的有评分的任务
     project_tasks = db.query(

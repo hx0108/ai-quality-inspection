@@ -111,7 +111,6 @@ async def score_module(state: dict) -> dict:
 
     db = SessionLocal()
     try:
-        # 获取检查记录
         record = db.query(InspectionRecord).filter(
             InspectionRecord.record_id == record_id
         ).first()
@@ -119,153 +118,18 @@ async def score_module(state: dict) -> dict:
             scoring_tracker.set_module_status(task_id, module_name, "failed", "记录不存在")
             return {"errors": [f"记录不存在: {record_id}"]}
 
-        # 清除旧评分结果
-        deleted = db.query(ScoringResult).filter(
-            ScoringResult.record_id == record_id,
-            ScoringResult.module_name == module_name
-        ).delete()
-        if deleted > 0:
-            logger.info(f"清除旧评分: {module_name} ({deleted}条)")
-            db.commit()
+        # 统一委托 score_module_core（支持蝶城/非蝶城/砺质，消除重复实现）
+        from core.scoring_service import score_module_core
+        result = await score_module_core(db, task_id, module_name, record_id,
+                                         standard_type=standard_type, project_id=record.project_id)
+        count = result.get("count", 0)
+        errors = result.get("errors", [])
 
-        # 获取该模块的问题
-        issues = db.query(Issue).filter(
-            Issue.record_id == record_id,
-            Issue.module_name == module_name
-        ).all()
+        if errors:
+            logger.warning(f"评分存在问题: {module_name}: {errors}")
 
-        issues_by_item = {}
-        for issue in issues:
-            if issue.item_id not in issues_by_item:
-                issues_by_item[issue.item_id] = []
-            issues_by_item[issue.item_id].append({
-                "description": issue.description,
-                "severity": issue.severity,
-                "location": issue.location
-            })
-
-        # 从模板获取检查项
-        template_items = load_template_items(module_name, standard_type)
-        if not template_items:
-            logger.warning(f"无模板数据: {module_name}")
-            scoring_tracker.set_module_status(task_id, module_name, "failed", "无模板数据")
-            return {"errors": [f"无模板数据: {module_name}"]}
-
-        # 分离合格项和有问题项
-        qualified_items = []
-        problem_items = []
-
-        for item in template_items:
-            item_id = item.get("item_id")
-            item_issues = issues_by_item.get(item_id, [])
-            entry = {
-                "item_id": item_id,
-                "item_name": item.get("item_name", ""),
-                "check_standard": item.get("check_standard", ""),
-                "check_method": item.get("check_method", ""),
-                "scoring_rule": item.get("scoring_rule", "完全符合5分"),
-                "weight": item.get("weight", 0.01),
-                "issues": item_issues,
-                "is_skipped": False
-            }
-            if not item_issues:
-                qualified_items.append(entry)
-            else:
-                problem_items.append(entry)
-
-        logger.info(f"{module_name}: 合格{len(qualified_items)}项, 有问题{len(problem_items)}项")
-
-        # 合格项直接满分
-        results = []
-        for item in qualified_items:
-            results.append({
-                "item_id": item["item_id"],
-                "item_name": item["item_name"],
-                "score": 5,
-                "scoring_basis": "检查合格，无问题发现，给予满分5分",
-                "improvement_suggestion": ""
-            })
-
-        # 有问题项调用AI评分
-        if problem_items and settings.DASHSCOPE_API_KEY:
-            # 构建记忆上下文（RAG + 历史评分参考）
-            memory_context = _build_memory_context(
-                task_id=task_id,
-                project_id=record.project_id,
-                module_name=module_name,
-                problem_items=problem_items
-            )
-
-            llm = QwenClient()
-            logger.info(f"AI评分: {module_name} ({len(problem_items)}项)")
-            ai_results = await llm.score_module(module_name, problem_items, memory_context=memory_context)
-            logger.info(f"AI返回: {module_name} ({len(ai_results)}项)")
-
-            # 检查 AI 返回的结果是否包含默认分（"评分异常"标记）
-            has_default_scores = any("评分异常" in r.get("scoring_basis", "") for r in ai_results)
-
-            if has_default_scores:
-                # AI 评分失败，使用基于规则的回退评分替代笼统的中等分数
-                logger.warning(f"{module_name} AI评分返回了默认分数，使用基于规则的回退评分")
-                ai_results = _rule_based_fallback_scores(problem_items)
-
-            results.extend(ai_results)
-
-            # 评分完成后更新记忆
-            if ai_results:
-                _update_memories_after_scoring(
-                    task_id=task_id,
-                    project_id=record.project_id,
-                    module_name=module_name,
-                    scoring_results=results,
-                    issues=issues
-                )
-        elif problem_items:
-            # 无 API Key 时使用基于规则的评分
-            results.extend(_rule_based_fallback_scores(problem_items))
-
-        # 合并所有检查项
-        all_items = qualified_items + problem_items
-
-        # 保存评分结果到 DB（使用 UUID 避免并发时 scoring_id 冲突）
-        for i, item_result in enumerate(results):
-            scoring_id = f"SCR-{_uuid.uuid4().hex[:12]}"
-
-            # 优先使用AI评分时注入的原始数据，兼容旧逻辑
-            item_id = item_result.get("item_id")
-            item_name = item_result.get("item_name", "")
-            score = item_result.get("score", 5)
-
-            original_item = next((x for x in all_items if x["item_id"] == item_id), {}) if item_id else {}
-
-            weight = item_result.get("_weight") or original_item.get("weight", 0.01)
-            check_standard = item_result.get("_check_standard") or original_item.get("check_standard", "")
-            check_method = item_result.get("_check_method") or original_item.get("check_method", "")
-            scoring_rule = item_result.get("_scoring_rule") or original_item.get("scoring_rule", "")
-            if not item_name:
-                item_name = original_item.get("item_name", "")
-
-            result = ScoringResult(
-                scoring_id=scoring_id,
-                record_id=record_id,
-                module_name=module_name,
-                item_id=item_id,
-                item_name=item_name,
-                score=score,
-                weight=weight,
-                weighted_score=score * weight,
-                scoring_basis=item_result.get("scoring_basis", ""),
-                improvement_suggestion=item_result.get("improvement_suggestion", ""),
-                check_standard=check_standard,
-                check_method=check_method,
-                scoring_rule=scoring_rule,
-                is_skipped=item_result.get("is_skipped", False)
-            )
-            db.add(result)
-
-        db.commit()
         scoring_tracker.set_module_status(task_id, module_name, "completed")
-        logger.info(f"完成: {module_name} ({len(results)}条)")
+        logger.info(f"完成: {module_name} ({count}条)")
 
         # SSE 事件推送
         try:
@@ -274,13 +138,13 @@ async def score_module(state: dict) -> dict:
                 "type": "scoring_progress",
                 "module": module_name,
                 "status": "completed",
-                "items_count": len(results),
+                "items_count": count,
             })
         except Exception:
-            pass  # SSE 推送失败不影响主流程
+            pass
 
         return {
-            "scoring_results": [{"module_name": module_name, "count": len(results)}],
+            "scoring_results": [{"module_name": module_name, "count": count}],
             "completed_modules": [module_name]
         }
 
@@ -290,8 +154,13 @@ async def score_module(state: dict) -> dict:
         traceback.print_exc()
         scoring_tracker.set_module_status(task_id, module_name, "failed", str(e))
 
-        # 保存默认分数
-        _save_default_scores(db, task_id, module_name, record_id)
+        # 保存默认分数（按 standard_type，支持砺质）
+        try:
+            from core.scoring_service import save_default_scores
+            save_default_scores(db, task_id, module_name, record_id,
+                               standard_type=standard_type, reason="评分失败，使用默认分数")
+        except Exception as se:
+            logger.error(f"保存默认分数失败: {se}")
 
         return {
             "scoring_results": [{"module_name": module_name, "count": 0}],
@@ -305,8 +174,9 @@ async def score_module(state: dict) -> dict:
 def compute_total(state: dict) -> dict:
     """
     节点3: 计算项目总分
-    复用 _compute_and_save_total_score() 逻辑
+    计分模型按 task.standard_type 选择（蝶城/非蝶城=加权5分制；砺质=封顶+扣分）。
     """
+    from core.scoring_aggregation import aggregate
     task_id = state["task_id"]
     logger.info(f"compute_total: {task_id}")
 
@@ -315,6 +185,7 @@ def compute_total(state: dict) -> dict:
         task = db.query(InspectionTask).filter(InspectionTask.task_id == task_id).first()
         if not task:
             return {"errors": ["任务不存在"]}
+        standard_type = task.standard_type or "diecheng"
 
         results = db.query(ScoringResult).join(
             InspectionRecord, ScoringResult.record_id == InspectionRecord.record_id
@@ -328,24 +199,16 @@ def compute_total(state: dict) -> dict:
             modules_data[r.module_name]["raw_score_sum"] += float(r.weighted_score)
             modules_data[r.module_name]["weight_sum"] += float(r.weight)
 
-        # 更新已评分模块的百分制得分
+        # 统一计算（按 standard_type 自动选择计分模型）
+        agg = aggregate(standard_type, modules_data)
+        module_pct_map = agg["module_pct"]
         for r in results:
-            data = modules_data.get(r.module_name)
-            if data and data["weight_sum"] > 0:
-                r.module_pct_score = (data["raw_score_sum"] / (5 * data["weight_sum"])) * 100
+            if r.module_name in module_pct_map:
+                r.module_pct_score = module_pct_map[r.module_name]
 
-        # 计算项目总分
-        project_total = 0
-        for module_name, module_weight in settings.MODULE_WEIGHTS.items():
-            data = modules_data.get(module_name)
-            if data and data["weight_sum"] > 0:
-                max_score = 5 * data["weight_sum"]
-                module_pct = (data["raw_score_sum"] / max_score * 100)
-                project_total += module_pct * module_weight
-
-        task.total_score = round(project_total, 2)
+        task.total_score = agg["total"]
         db.commit()
-        logger.info(f"项目总分: {task.total_score}")
+        logger.info(f"项目总分({standard_type}): {task.total_score}")
         return {}
 
     except Exception as e:
@@ -536,8 +399,16 @@ def _update_memories_after_scoring(
         issues: 该模块的问题列表
     """
     try:
-        # 计算模块百分制得分
-        if scoring_results:
+        from core import standards as stds
+        # 计算模块得分（记忆上下文用；权威值得由 compute_total 通过 aggregate 计算）
+        lizhi_cfg = stds.get_module_cfg("lizhi", module_name)
+        if lizhi_cfg:  # 砺质模块
+            raw = sum(float(r.get("weighted_score", 0)) for r in scoring_results) if scoring_results else 0.0
+            if lizhi_cfg.get("role") == "deduction":
+                module_pct_score = raw
+            else:
+                module_pct_score = min(raw, lizhi_cfg.get("max_score", 25))
+        elif scoring_results:
             total_weighted = sum(float(r.get("weighted_score", 0)) for r in scoring_results)
             total_weight = sum(float(r.get("weight", 0.01)) for r in scoring_results)
             if total_weight > 0:

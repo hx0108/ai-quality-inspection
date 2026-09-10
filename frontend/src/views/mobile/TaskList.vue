@@ -13,10 +13,24 @@
       </template>
     </van-nav-bar>
 
+    <!-- 搜索 + 状态筛选（原型结构） -->
+    <div class="filter-bar">
+      <van-search
+        v-model="searchQ"
+        placeholder="搜索项目 / 日期"
+        shape="round"
+        class="filter-search"
+        :show-action="false"
+      />
+      <div class="seg">
+        <button v-for="f in segs" :key="f.k" type="button" :class="{ on: filterSeg === f.k }" @click="filterSeg = f.k">{{ f.label }}</button>
+      </div>
+    </div>
+
     <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
       <van-loading v-if="loading && tasks.length === 0" class="loading-center" />
 
-      <van-empty v-else-if="!loading && tasks.length === 0" description="暂无检查任务">
+      <van-empty v-else-if="!loading && filteredTasks.length === 0" description="暂无检查任务">
         <van-button v-if="isAdmin" type="primary" @click="showCreate = true">
           创建检查任务
         </van-button>
@@ -24,14 +38,20 @@
       </van-empty>
 
       <div v-else class="task-list">
-        <div v-for="task in tasks" :key="task.task_id" class="task-card" :class="`status-${task.status}`">
+        <div v-for="task in filteredTasks" :key="task.task_id" class="task-card">
           <div class="task-header" @click="toggleTask(task.task_id)">
             <div class="task-info">
               <div class="task-title">{{ task.project_name }}</div>
-              <div class="task-date">检查日期：{{ task.check_date }}</div>
+              <div class="task-meta">
+                <span>{{ task.check_date }}</span>
+                <span v-if="task.my_modules && task.my_modules.length" class="meta-dot">·</span>
+                <span v-if="task.my_modules && task.my_modules.length">{{ task.my_modules.length }} 模块</span>
+                <span v-if="scoringStatusMap.get(task.task_id)?.status === 'scoring'" class="meta-scoring">评分中…</span>
+              </div>
             </div>
-            <van-tag :type="getStatusType(task.status)">{{ getStatusText(task.status) }}</van-tag>
-            <van-icon :name="expandedTaskId === task.task_id ? 'arrow-up' : 'arrow-down'" />
+            <span v-if="task.total_score != null" class="sp-pill" :class="getScoreClass(task.total_score)">{{ task.total_score }}</span>
+            <span class="st-chip" :class="'st-' + task.status">{{ getStatusText(task.status) }}</span>
+            <van-icon :name="expandedTaskId === task.task_id ? 'arrow-up' : 'arrow-down'" class="task-chev" />
           </div>
 
           <!-- 展开区域 -->
@@ -42,7 +62,7 @@
                 <span class="score-card-label">AI评分</span>
                 <span v-if="task.total_score != null" class="score-card-value" :class="getScoreClass(task.total_score)">{{ task.total_score }}</span>
                 <span v-else-if="scoringStatusMap.get(task.task_id)?.status === 'scoring'" class="score-card-loading">
-                  <van-loading size="14" color="#d97706" style="margin-right: 4px" />评分中...
+                  <van-loading size="14" color="var(--orange)" style="margin-right: 4px" />评分中...
                 </span>
                 <span v-else class="score-card-value" style="color: #9ba3af">待评分</span>
               </div>
@@ -119,13 +139,7 @@
       </div>
     </van-pull-refresh>
 
-    <van-tabbar v-model="activeTab" route>
-      <van-tabbar-item icon="chart-trending-o" to="/dashboard">概览</van-tabbar-item>
-      <van-tabbar-item icon="home-o" to="/tasks">任务</van-tabbar-item>
-      <van-tabbar-item icon="todo-list-o" to="/reports">报告</van-tabbar-item>
-      <van-tabbar-item icon="shield-o" to="/rectification">整改</van-tabbar-item>
-      <van-tabbar-item icon="bar-chart-o" to="/analysis-mobile">分析</van-tabbar-item>
-    </van-tabbar>
+    <MobileTabbar />
 
     <!-- 用户信息弹窗 -->
     <van-action-sheet v-model:show="showProjectSheet" title="切换项目">
@@ -220,6 +234,7 @@ import { useRouter } from 'vue-router'
 import { showToast, showSuccessToast } from 'vant'
 import { useAuthStore } from '../../stores/auth'
 import MobileUserSheet from '../../components/MobileUserSheet.vue'
+import MobileTabbar from '../../components/MobileTabbar.vue'
 import { getMyTasks, getProjects, createTask } from '../../api/tasks'
 import { createRecord } from '../../api/inspection'
 import { getScoringStatus, getModuleScoringStatus } from '../../api/scoring'
@@ -230,7 +245,6 @@ const authStore = useAuthStore()
 const tasks = ref([])
 const loading = ref(false)
 const refreshing = ref(false)
-const activeTab = ref(1)
 const showUser = ref(false)
 const showProjectSheet = ref(false)
 
@@ -278,6 +292,27 @@ const toggleTask = (taskId) => {
   expandedTaskId.value = expandedTaskId.value === taskId ? null : taskId
 }
 
+// 搜索 + 状态筛选
+const searchQ = ref('')
+const filterSeg = ref('all')
+const segs = [
+  { k: 'all', label: '全部' },
+  { k: 'pending', label: '待开始' },
+  { k: 'in_progress', label: '进行中' },
+  { k: 'completed', label: '已完成' }
+]
+const filteredTasks = computed(() => {
+  let list = tasks.value
+  if (filterSeg.value !== 'all') {
+    list = list.filter(t => t.status === filterSeg.value)
+  }
+  const q = searchQ.value.trim()
+  if (q) {
+    list = list.filter(t => (t.project_name || '').includes(q) || (t.check_date || '').includes(q))
+  }
+  return list
+})
+
 const onLoad = async () => {
   loading.value = true
   try {
@@ -313,8 +348,9 @@ const fetchProjects = async () => {
 
 const fetchStandardTypesList = () => {
   standardTypes.value = [
-    { value: 'diecheng', label: '标准版' },
-    { value: 'feidiecheng', label: '简化版' }
+    { value: 'diecheng', label: '蝶城版' },
+    { value: 'feidiecheng', label: '非蝶城版' },
+    { value: 'lizhi', label: '砺质版' }
   ]
 }
 
@@ -388,11 +424,6 @@ const onCreateTask = async () => {
   } finally {
     creating.value = false
   }
-}
-
-const getStatusType = (status) => {
-  const map = { pending: 'default', in_progress: 'warning', completed: 'success' }
-  return map[status] || 'default'
 }
 
 const getStatusText = (status) => {
@@ -479,11 +510,11 @@ const getScoringStatusText = (taskId) => {
   return '未评分'
 }
 
+// 得分三档（与设计系统 v2 / MobileDashboard 对齐：≥90 好 / 70-89 关注 / <70 异常）
 const getScoreClass = (score) => {
-  if (score >= 90) return 'score-excellent'
-  if (score >= 75) return 'score-good'
-  if (score >= 60) return 'score-normal'
-  return 'score-poor'
+  if (score >= 90) return 'sp-hi'
+  if (score >= 70) return 'sp-mid'
+  return 'sp-lo'
 }
 
 const goScoring = (taskId) => {
@@ -507,7 +538,7 @@ onMounted(() => {
   font-size: 16px;
   font-weight: 600;
   cursor: pointer;
-  color: var(--van-nav-bar-title-text-color, var(--van-text-color, #323233));
+  color: var(--van-nav-bar-title-text-color, var(--ink-900));
 }
 .project-sheet-list { padding: 8px 0; }
 .project-sheet-item {
@@ -518,13 +549,60 @@ onMounted(() => {
   font-size: 15px;
   cursor: pointer;
 }
-.project-sheet-item:active { background: #f5f5f5; }
-.project-sheet-active { color: #c6a56a; font-weight: 600; }
+.project-sheet-item:active { background: var(--bg-hover); }
+.project-sheet-active { color: var(--blue); font-weight: 600; }
 
 .task-list-page {
   min-height: 100vh;
-  background: #f5f7fa;
-  padding-bottom: 60px;
+  background: var(--bg);
+  padding-bottom: 66px;
+  font-family: var(--sans);
+}
+
+/* ===== 筛选条 ===== */
+.filter-bar {
+  padding: 10px 14px 0;
+  display: grid;
+  gap: 10px;
+}
+.filter-search {
+  padding: 0;
+  background: transparent;
+}
+.filter-search :deep(.van-search__content) {
+  border-radius: var(--r);
+  background: var(--bg-card);
+  border: 1px solid var(--ink-200);
+}
+.seg {
+  display: inline-flex;
+  background: var(--bg-muted);
+  border: 1px solid var(--ink-200);
+  border-radius: var(--r);
+  padding: 2px;
+  gap: 2px;
+  width: fit-content;
+}
+.seg button {
+  height: 28px;
+  padding: 0 12px;
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  font-family: var(--sans);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-600);
+  cursor: pointer;
+  transition: all 0.12s;
+  white-space: nowrap;
+}
+.seg button:hover { color: var(--ink-900); }
+.seg button.on {
+  background: var(--bg-card);
+  color: var(--ink-900);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(22, 22, 28, 0.08);
 }
 
 .loading-center {
@@ -535,43 +613,24 @@ onMounted(() => {
 }
 
 .task-list {
-  padding: 12px;
+  padding: 12px 14px;
 }
 
+/* ===== 任务卡（无装饰条，1px 边框） ===== */
 .task-card {
-  background: #fff;
+  background: var(--bg-card);
+  border: 1px solid var(--ink-200);
   border-radius: 12px;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
   overflow: hidden;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
-  position: relative;
-  transition: box-shadow 0.2s;
 }
-
-.task-card:active {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-/* 左侧状态条 */
-.task-card::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 4px;
-  background: #9ba3af;
-}
-
-.task-card.status-pending::before { background: #9ba3af; }
-.task-card.status-in_progress::before { background: #d97706; }
-.task-card.status-completed::before { background: #059669; }
 
 .task-header {
   display: flex;
   align-items: center;
-  padding: 16px 16px 16px 20px;
-  gap: 10px;
+  padding: 13px 14px;
+  gap: 8px;
+  cursor: pointer;
 }
 
 .task-info {
@@ -581,32 +640,75 @@ onMounted(() => {
 
 .task-title {
   font-size: 15px;
-  font-weight: 600;
-  color: #1a1d26;
+  font-weight: 700;
+  color: var(--ink-900);
   line-height: 1.4;
 }
 
-.task-date {
+.task-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
   font-size: 12px;
-  color: #9ba3af;
-  margin-top: 4px;
+  color: var(--ink-500);
+  margin-top: 3px;
+  font-variant-numeric: tabular-nums;
 }
 
+.meta-dot { color: var(--ink-300); }
+.meta-scoring { color: var(--warn-strong); font-weight: 600; }
+
+.task-chev { color: var(--ink-400); font-size: 14px; flex-shrink: 0; }
+
+/* 分数胶囊（三档） */
+.sp-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.sp-pill.sp-hi { background: #edf6f0; color: var(--ok-strong); }
+.sp-pill.sp-mid { background: #faf5e9; color: var(--warn-strong); }
+.sp-pill.sp-lo { background: var(--err-bg); color: var(--err-strong); }
+
+/* 状态芯片 */
+.st-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 21px;
+  padding: 0 8px;
+  border-radius: var(--r-sm);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.st-chip.st-pending { background: var(--bg-muted); color: var(--ink-500); border: 1px solid var(--ink-200); }
+.st-chip.st-in_progress { background: var(--blue-bg); color: var(--brand-ink); border: 1px solid var(--brand-border); }
+.st-chip.st-completed { background: var(--ok-bg); color: var(--ok-strong); border: 1px solid #b9e2cc; }
+
 .task-actions {
-  padding: 0 16px 14px 20px;
+  padding: 0 14px 13px;
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
 }
 
-/* 评分信息卡片 */
+/* ===== 展开区：评分信息 ===== */
 .score-card {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px 12px 20px;
-  background: linear-gradient(135deg, #f0f9ff, #eff6ff);
-  border-top: 1px solid #e0e7ff;
+  padding: 11px 14px;
+  background: var(--bg-muted);
+  border-top: 1px solid var(--ink-100);
 }
 
 .score-card-left {
@@ -617,38 +719,39 @@ onMounted(() => {
 
 .score-card-label {
   font-size: 13px;
-  color: #64748b;
+  color: var(--ink-500);
   font-weight: 500;
 }
 
 .score-card-value {
   font-size: 24px;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
-.score-card-value.score-excellent { color: #059669; }
-.score-card-value.score-good { color: #2563eb; }
-.score-card-value.score-normal { color: #d97706; }
-.score-card-value.score-poor { color: #dc2626; }
+.score-card-value.sp-hi { color: var(--ok-strong); }
+.score-card-value.sp-mid { color: var(--warn-strong); }
+.score-card-value.sp-lo { color: var(--err-strong); }
 
 .score-card-loading {
   display: flex;
   align-items: center;
   font-size: 13px;
-  color: #d97706;
+  color: var(--warn-strong);
 }
 
+/* ===== 展开区：模块列表 ===== */
 .module-list {
-  border-top: 1px solid #f5f5f5;
-  background: #fafbfc;
+  border-top: 1px solid var(--ink-100);
+  background: var(--bg);
 }
 
 .module-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 16px;
-  border-bottom: 1px solid #f0f0f0;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--ink-100);
   transition: background 0.15s;
 }
 
@@ -657,7 +760,7 @@ onMounted(() => {
 }
 
 .module-item:active {
-  background: #f5f7fa;
+  background: var(--bg-hover);
 }
 
 .module-info {
@@ -670,11 +773,11 @@ onMounted(() => {
 
 .module-name {
   font-size: 14px;
-  color: #333;
+  color: var(--ink-800);
 }
 
 .empty-tip {
-  color: #9ba3af;
+  color: var(--ink-400);
   font-size: 14px;
   margin-top: 10px;
 }
@@ -687,16 +790,6 @@ onMounted(() => {
   text-align: center;
   margin-bottom: 20px;
   font-size: 17px;
-  color: #1a1d26;
-}
-
-/* 弹窗内装饰条 */
-.create-form::before {
-  content: '';
-  display: block;
-  height: 3px;
-  background: #2563eb;
-  border-radius: 2px;
-  margin-bottom: 20px;
+  color: var(--ink-900);
 }
 </style>

@@ -51,6 +51,10 @@ export function createTask(data) {
   return request.post('/tasks', data)
 }
 
+export function createTaskBatch(data) {
+  return request.post('/tasks/batch', data)
+}
+
 export function getTaskDetail(taskId) {
   return request.get(`/tasks/${taskId}`)
 }
@@ -61,6 +65,10 @@ export function getAssignments(taskId) {
 
 export function assignModule(taskId, data) {
   return request.post(`/tasks/${taskId}/assign`, data)
+}
+
+export function createTaskAssignBatch(data) {
+  return request.post('/tasks/assign/batch', data)
 }
 
 export function getStandardTypes() {

@@ -70,6 +70,7 @@
     <div class="main">
       <header class="top">
         <div class="top-left">
+          <span class="top-crumb">{{ pageGroup }}</span>
           <span class="top-title">{{ pageTitle }}</span>
         </div>
         <div class="top-right">
@@ -93,11 +94,36 @@
               </el-dropdown-menu>
             </template>
           </el-dropdown>
+          <!-- 通知铃铛（原型顶栏三件套） -->
+          <el-popover placement="bottom-end" :width="340" trigger="click" popper-class="notify-popover" @show="loadNotifications">
+            <template #reference>
+              <button class="icon-btn" title="通知">
+                <svg viewBox="0 0 16 16"><path d="M3.5 11.5h9c-1-1-1.5-2.2-1.5-4a3 3 0 10-6 0c0 1.8-.5 3-1.5 4z" /><path d="M6.8 13.5a1.3 1.3 0 002.4 0" /></svg>
+                <span v-if="unreadCount > 0" class="bubble" />
+              </button>
+            </template>
+            <div class="notify-panel">
+              <div class="notify-head">
+                <span>通知</span>
+                <button v-if="notifications.length" class="notify-all" @click="onMarkAllRead">全部已读</button>
+              </div>
+              <div class="notify-list">
+                <div v-for="n in notifications" :key="n.notification_id" class="notify-item" :class="{ unread: !n.is_read }">
+                  <span class="notify-dot" />
+                  <div class="notify-body">
+                    <div class="notify-t">{{ n.title }}</div>
+                    <div class="notify-c">{{ n.content }}</div>
+                  </div>
+                </div>
+                <div v-if="!notifications.length" class="notify-empty">暂无通知</div>
+              </div>
+            </div>
+          </el-popover>
           <!-- User dropdown -->
           <el-dropdown @command="onCommand">
             <div class="user-chip">
-              <svg viewBox="0 0 16 16" style="width:14px;height:14px"><circle cx="8" cy="5" r="3.5" /><path d="M1 15c0-3.9 3.1-7 7-7s7 3.1 7 7" /></svg>
-              {{ user.real_name || user.username }}
+              <span class="avatar">{{ (user.real_name || user.username || 'U').slice(0, 1) }}</span>
+              <b>{{ user.real_name || user.username }}</b>
               <svg viewBox="0 0 16 16"><path d="M4 6l4 4 4-4" /></svg>
             </div>
             <template #dropdown>
@@ -122,9 +148,10 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
+import { getNotifications, getUnreadCount, markAllAsRead } from '../../api/notification'
 
 const router = useRouter()
 const route = useRoute()
@@ -150,6 +177,21 @@ const pageTitle = computed(() => {
   return map[route.path] || '管理后台'
 })
 
+const pageGroup = computed(() => {
+  const map = {
+    '/pc/dashboard': '数据中心',
+    '/pc/tasks': '品质管理',
+    '/pc/scoring-management': '品质管理',
+    '/pc/reports': '品质管理',
+    '/pc/rectifications': '品质管理',
+    '/pc/analysis': '数据中心',
+    '/pc/llm-monitor': '智能运营',
+    '/pc/ai-metrics': '智能运营',
+    '/pc/settings': '系统'
+  }
+  return map[route.path] || ''
+})
+
 function navigate(path) {
   router.push(path)
 }
@@ -165,6 +207,32 @@ const onCommand = (cmd) => {
 const onProjectSwitch = (projectId) => {
   authStore.setActiveProject(projectId)
 }
+
+// ===== 通知铃铛 =====
+const notifications = ref([])
+const unreadCount = ref(0)
+
+const loadNotifications = async () => {
+  try {
+    const res = await getNotifications({ page: 1, page_size: 15 })
+    notifications.value = res.items || []
+  } catch (e) { /* 静默：通知属辅助功能 */ }
+}
+
+const onMarkAllRead = async () => {
+  try {
+    await markAllAsRead()
+    notifications.value.forEach(n => { n.is_read = true })
+    unreadCount.value = 0
+  } catch (e) { /* ignore */ }
+}
+
+onMounted(async () => {
+  try {
+    const res = await getUnreadCount()
+    unreadCount.value = res.unread_count || 0
+  } catch (e) { /* ignore */ }
+})
 </script>
 
 <style scoped>
@@ -175,73 +243,79 @@ const onProjectSwitch = (projectId) => {
   font-family: var(--sans);
 }
 
-/* ===== Sidebar ===== */
+/* ===== Sidebar（深色） ===== */
 .side {
-  width: 220px;
-  background: var(--bg-card);
-  border-right: 1px solid var(--ink-100);
+  width: 216px;
+  background: var(--side-bg);
+  border-right: 1px solid var(--side-border);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
 }
 
 .side-brand {
-  height: 56px;
+  height: 52px;
   display: flex;
   align-items: center;
   padding: 0 16px;
-  gap: 10px;
-  border-bottom: 1px solid var(--ink-100);
+  gap: 9px;
+  border-bottom: 1px solid var(--side-border);
+  flex-shrink: 0;
 }
 
 .side-logo {
-  width: 28px;
-  height: 28px;
-  background: var(--blue);
-  border-radius: var(--r-sm);
+  width: 26px;
+  height: 26px;
+  background: linear-gradient(135deg, #2bb8aa 0%, #0c7168 100%);
+  border-radius: 7px;
   display: flex;
   align-items: center;
   justify-content: center;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+  flex-shrink: 0;
 }
 
 .side-logo svg {
-  width: 18px;
-  height: 18px;
+  width: 15px;
+  height: 15px;
   stroke: #fff;
   fill: none;
   stroke-width: 2;
 }
 
 .side-title {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
-  color: var(--ink-900);
-  letter-spacing: -0.2px;
+  color: var(--side-text-strong);
+  letter-spacing: 0.2px;
 }
 
 .side-nav {
   flex: 1;
-  padding: 8px 0;
+  padding: 10px 10px 16px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
 }
+
+.side-nav::-webkit-scrollbar { width: 5px; }
+.side-nav::-webkit-scrollbar-thumb { background: #2c2c36; border-radius: 3px; }
 
 .sn-group {
   margin-bottom: 4px;
 }
 
 .sn-label {
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 600;
-  color: var(--ink-400);
-  padding: 10px 20px 4px;
-  letter-spacing: 0.5px;
+  color: #5d5d6a;
+  padding: 14px 10px 5px;
+  letter-spacing: 0.8px;
 }
 
 .sn-end {
   margin-top: auto;
-  border-top: 1px solid var(--ink-100);
+  border-top: 1px solid var(--side-border);
   padding-top: 8px;
 }
 
@@ -249,46 +323,49 @@ const onProjectSwitch = (projectId) => {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 20px;
-  font-size: 14px;
+  gap: 9px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: var(--r);
+  font-size: 13px;
   font-weight: 500;
-  color: #5c6477;
+  color: var(--side-text);
   cursor: pointer;
-  transition: all 0.12s var(--ease);
+  transition: background 0.12s var(--ease), color 0.12s var(--ease);
+  margin-bottom: 1px;
 }
 
 .sn-item:hover {
-  background: var(--bg-muted);
-  color: var(--ink-900);
+  background: var(--side-hover);
+  color: var(--side-text-strong);
 }
 
 .sn-item.on {
-  color: var(--blue);
+  color: #c8ece7;
   font-weight: 600;
-  background: var(--blue-bg);
+  background: var(--side-active-bg);
 }
 
 .sn-item.on::before {
   content: '';
   position: absolute;
-  left: 0;
+  left: -10px;
   top: 50%;
   transform: translateY(-50%);
   width: 3px;
-  height: 18px;
-  background: var(--blue);
-  border-radius: 2px;
+  height: 16px;
+  border-radius: 0 2px 2px 0;
+  background: var(--side-active-line);
 }
 
 .sn-item svg {
-  width: 16px;
-  height: 16px;
+  width: 15px;
+  height: 15px;
   stroke: currentColor;
   fill: none;
-  stroke-width: 1.8;
+  stroke-width: 1.7;
   flex-shrink: 0;
-  opacity: 0.6;
+  opacity: 0.75;
 }
 
 .sn-item.on svg {
@@ -300,10 +377,12 @@ const onProjectSwitch = (projectId) => {
   font-size: 10px;
   font-weight: 700;
   font-family: var(--mono);
-  padding: 1px 6px;
-  border-radius: 3px;
-  background: var(--err-bg);
-  color: var(--err);
+  padding: 0 5px;
+  height: 15px;
+  line-height: 15px;
+  border-radius: 8px;
+  background: var(--err);
+  color: #fff;
 }
 
 /* ===== Main area ===== */
@@ -316,25 +395,30 @@ const onProjectSwitch = (projectId) => {
 
 /* ===== Top header ===== */
 .top {
-  height: 56px;
+  height: 52px;
   background: var(--bg-card);
-  border-bottom: 1px solid var(--ink-100);
+  border-bottom: 1px solid var(--ink-200);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 24px;
+  padding: 0 20px;
   flex-shrink: 0;
 }
 
 .top-left {
   display: flex;
-  align-items: center;
-  gap: 14px;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.top-crumb {
+  font-size: 12px;
+  color: var(--ink-400);
 }
 
 .top-title {
-  font-size: 16px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 600;
   color: var(--ink-900);
 }
 
@@ -347,20 +431,22 @@ const onProjectSwitch = (projectId) => {
 .proj-chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 5px 12px;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--ink-200);
   border-radius: var(--r);
-  font-size: 13px;
+  background: var(--bg-card);
+  font-size: 12.5px;
   font-weight: 600;
-  color: var(--blue);
-  background: var(--blue-bg);
+  color: var(--ink-800);
   cursor: pointer;
-  transition: background 0.12s, border-color 0.12s;
-  border: 1px solid transparent;
+  transition: border-color 0.12s, background 0.12s;
 }
 
 .proj-chip:hover {
-  border-color: var(--blue);
+  border-color: var(--ink-300);
+  background: var(--bg-hover);
 }
 
 .proj-chip svg {
@@ -371,21 +457,66 @@ const onProjectSwitch = (projectId) => {
   stroke-width: 2;
 }
 
+.icon-btn {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--r);
+  background: transparent;
+  color: var(--ink-600);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  position: relative;
+}
+.icon-btn:hover { background: var(--bg-hover); color: var(--ink-900); }
+.icon-btn svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.7; }
+.icon-btn .bubble {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--err);
+  border: 1.5px solid var(--bg-card);
+}
+
 .user-chip {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 12px;
-  border-radius: var(--r);
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink-600);
+  gap: 7px;
+  height: 34px;
+  padding: 0 10px 0 4px;
+  border-radius: 999px;
   cursor: pointer;
-  transition: all 0.12s;
+  transition: background 0.12s;
 }
 
 .user-chip:hover {
-  background: var(--bg-muted);
+  background: var(--bg-hover);
+}
+
+.user-chip .avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--blue-bg);
+  color: var(--brand-ink);
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.user-chip b {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-800);
 }
 
 .user-chip svg {
@@ -400,10 +531,17 @@ const onProjectSwitch = (projectId) => {
 .cnt {
   flex: 1;
   background: var(--bg);
-  padding: 20px;
+  padding: 22px 24px 32px;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--ink-200) transparent;
+}
+
+/* 原型：内容限宽居中 */
+.cnt > * {
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
 }
 
 .cnt::-webkit-scrollbar {
@@ -414,4 +552,65 @@ const onProjectSwitch = (projectId) => {
   background: var(--ink-200);
   border-radius: 3px;
 }
+
+/* ===== 通知面板（非 scoped 不生效，此处经 el-popover 挂 body，用 :global 语义） ===== */
+</style>
+
+<style>
+/* 通知面板（popover 挂在 body 下，需非 scoped） */
+.notify-popover {
+  padding: 0 !important;
+  border-radius: var(--r-lg) !important;
+  border: 1px solid var(--ink-200) !important;
+  box-shadow: var(--shadow-overlay) !important;
+}
+.notify-panel { font-family: var(--sans); }
+.notify-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--ink-100);
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--ink-900);
+}
+.notify-all {
+  border: none;
+  background: none;
+  font-size: 12px;
+  color: var(--blue);
+  cursor: pointer;
+  font-family: var(--sans);
+  font-weight: 600;
+}
+.notify-list { max-height: 360px; overflow-y: auto; }
+.notify-item {
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--ink-100);
+}
+.notify-item:last-child { border-bottom: none; }
+.notify-item.unread .notify-dot { background: var(--err); }
+.notify-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ink-300);
+  margin-top: 6px;
+  flex-shrink: 0;
+}
+.notify-body { flex: 1; min-width: 0; }
+.notify-t { font-size: 13px; font-weight: 600; color: var(--ink-900); }
+.notify-c {
+  font-size: 12px;
+  color: var(--ink-500);
+  margin-top: 2px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.notify-empty { text-align: center; color: var(--ink-400); font-size: 13px; padding: 36px 0; }
 </style>

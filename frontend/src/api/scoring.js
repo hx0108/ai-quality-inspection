@@ -53,6 +53,44 @@ export function exportScoringExcel(taskId) {
   })
 }
 
+// 批量导出任务中心AI评分结果（单个汇总Excel）
+export async function exportBatchScoringExcel(payload) {
+  const token = getAuthToken()
+  const response = await fetch('/api/v1/scoring/export/batch', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(payload)
+  })
+  if (!response.ok) {
+    let message = '批量导出失败'
+    try {
+      const data = await response.json()
+      message = data.detail || message
+    } catch (e) { /* ignore non-JSON errors */ }
+    throw new Error(message)
+  }
+
+  const disposition = response.headers.get('Content-Disposition') || ''
+  const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i)
+  const plainMatch = disposition.match(/filename="?([^";]+)"?/i)
+  let filename = `AI评分批量汇总_${new Date().toISOString().slice(0, 10).replaceAll('-', '')}.xlsx`
+  if (utf8Match) {
+    filename = decodeURIComponent(utf8Match[1])
+  } else if (plainMatch) {
+    filename = plainMatch[1]
+  }
+
+  return {
+    blob: await response.blob(),
+    filename,
+    exportedCount: Number(response.headers.get('X-Exported-Count') || 0),
+    skippedCount: Number(response.headers.get('X-Skipped-Count') || 0)
+  }
+}
+
 // 评分复核：获取待复核列表
 export function getAllPendingReviews(params) {
   return request.get('/scoring/review-queue', { params })

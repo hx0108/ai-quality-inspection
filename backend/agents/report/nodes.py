@@ -88,37 +88,35 @@ async def collect_data(state: dict) -> dict:
                 }
             modules_data[issue.module_name]["issue_count"] += 1
 
-        # 计算模块得分
+        # 计算模块得分（按 standard_type 选择计分模型）
+        from core.scoring_aggregation import aggregate
+        from core import standards as _stds
+        standard_type = task.standard_type or "diecheng"
+        is_lizhi = (standard_type == "lizhi")
+        _agg_input = {
+            m: {"raw_score_sum": d["raw_score_sum"], "weight_sum": d["weight_sum"]}
+            for m, d in modules_data.items()
+        }
+        agg = aggregate(standard_type, _agg_input)
+
         module_scores = []
-        project_total = 0
-        for module_name in settings.MODULE_WEIGHTS.keys():
+        for module_name in _stds.get_modules(standard_type):
+            cfg = _stds.get_module_cfg(standard_type, module_name)
+            module_weight = cfg.get("weight", 0)
             data = modules_data.get(module_name)
-            if not data:
-                module_scores.append({
-                    "module_name": module_name,
-                    "module_pct_score": 0,
-                    "weight_ratio": settings.MODULE_WEIGHTS[module_name],
-                    "weighted_contribution": 0,
-                    "item_count": 0,
-                    "issue_count": 0
-                })
-                continue
-
-            raw_sum = data["raw_score_sum"]
-            weight_sum = data["weight_sum"]
-            max_score = 5 * weight_sum
-            module_pct = (raw_sum / max_score * 100) if max_score > 0 else 0
-            contribution = module_pct * settings.MODULE_WEIGHTS[module_name]
-            project_total += contribution
-
+            module_pct = agg["module_pct"].get(module_name, 0)
+            contribution = module_pct if is_lizhi else module_pct * module_weight
             module_scores.append({
                 "module_name": module_name,
                 "module_pct_score": round(module_pct, 2),
-                "weight_ratio": settings.MODULE_WEIGHTS[module_name],
+                "weight_ratio": module_weight,
+                "max_score": cfg.get("max_score"),
+                "role": cfg.get("role", "score"),
                 "weighted_contribution": round(contribution, 2),
-                "item_count": len(data["items"]),
-                "issue_count": data["issue_count"]
+                "item_count": len(data["items"]) if data else 0,
+                "issue_count": data["issue_count"] if data else 0
             })
+        project_total = agg["total"]
 
         scored_count = len([m for m in module_scores if m["module_pct_score"] > 0])
         # 更新进度中的模块数
@@ -196,7 +194,8 @@ async def analyze_module(state: dict) -> dict:
     try:
         deepseek = DeepSeekClient()
         analysis = await deepseek.analyze_module(
-            module_name, module_pct_score, items_summary, memory_context
+            module_name, module_pct_score, items_summary, memory_context,
+            standard_type=state.get("standard_type", "diecheng"),
         )
         result = {
             "module_name": module_name,
@@ -294,7 +293,8 @@ async def generate_report_node(state: dict) -> dict:
         project_name = state.get("project_name", "")
         check_date = state.get("check_date", "")
         ai_full_report = await deepseek.generate_report(
-            project_name, check_date, module_summaries, total_score
+            project_name, check_date, module_summaries, total_score,
+            standard_type=state.get("standard_type", "diecheng"),
         )
         logger.info("综合报告生成完成")
         return {

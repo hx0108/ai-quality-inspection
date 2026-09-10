@@ -539,6 +539,7 @@ class QwenClient:
         items: List[Dict[str, Any]],
         max_retries: int = 2,
         memory_context: str = "",
+        standard_type: str = "diecheng",
     ) -> List[Dict[str, Any]]:
         """
         批量评分一个模块的所有检查项（一次API调用）
@@ -549,6 +550,7 @@ class QwenClient:
             items: 检查项列表（仅包含有问题/跳过的项）
             max_retries: 最大重试次数
             memory_context: 记忆上下文（短记忆+长记忆），用于注入到Prompt
+            standard_type: 检查标准（diecheng/feidiecheng 走0-5分制；lizhi 走各项max_score分制）
 
         Returns:
             评分结果列表
@@ -564,7 +566,7 @@ class QwenClient:
             return []
 
         total_items = len(problem_items)
-        logger.info(f"批量评分开始: {module_name} 模块，共 {total_items} 项需AI评分")
+        logger.info(f"批量评分开始: {module_name} 模块（{standard_type}），共 {total_items} 项需AI评分")
 
         # 分批处理：超过 8 个检查项时自动分批，避免单次 API 调用超时
         BATCH_SIZE = 8
@@ -575,11 +577,11 @@ class QwenClient:
                 batch = problem_items[batch_start:batch_start + BATCH_SIZE]
                 batch_num = batch_start // BATCH_SIZE + 1
                 logger.info(f"{module_name}: 评分第 {batch_num} 批 ({len(batch)}项)")
-                batch_results = await self._score_batch(module_name, batch, max_retries, memory_context)
+                batch_results = await self._score_batch(module_name, batch, max_retries, memory_context, standard_type)
                 all_results.extend(batch_results)
             return all_results
 
-        return await self._score_batch(module_name, problem_items, max_retries, memory_context)
+        return await self._score_batch(module_name, problem_items, max_retries, memory_context, standard_type)
 
     @staticmethod
     def _match_ai_results(score_results: list, problem_items: List[Dict[str, Any]],
@@ -599,7 +601,6 @@ class QwenClient:
 
         for score_item in score_results:
             score = float(score_item.get("score", 5))
-            score = max(0, min(5, score))
 
             ai_item_id = score_item.get("item_id")
             original = None
@@ -636,6 +637,11 @@ class QwenClient:
                             original = oitem
                             break
 
+            # 蝶城/非蝶城未提供 max_score，默认仍按 0-5 分校验；
+            # 砺质检查项会携带各自的 max_score，不能再被统一截断到 5 分。
+            max_score = float(original.get("max_score", 5)) if original else 5.0
+            score = max(0.0, min(max_score, score))
+
             entry = {
                 "score": score,
                 "scoring_basis": score_item.get("scoring_basis", ""),
@@ -663,8 +669,15 @@ class QwenClient:
         return results
 
     async def _score_batch(self, module_name: str, problem_items: List[Dict[str, Any]],
-                           max_retries: int = 2, memory_context: str = "") -> List[Dict[str, Any]]:
+                           max_retries: int = 2, memory_context: str = "",
+                           standard_type: str = "diecheng") -> List[Dict[str, Any]]:
         """单批评分（内部方法）"""
+
+        # 砺质走独立评分函数，与蝶城完全隔离
+        if standard_type == "lizhi":
+            return await self._score_batch_lizhi(module_name, problem_items, max_retries, memory_context)
+
+        is_lizhi = (standard_type == "lizhi")
 
         # 构建检查项列表文本（精简版，只含关键信息）
         items_text = ""
@@ -675,6 +688,7 @@ class QwenClient:
             scoring_rule = item.get("scoring_rule", "完全符合5分")
             issues = item.get("issues", [])
             is_skipped = item.get("is_skipped", False)
+            max_score = item.get("max_score", 5)
 
             # 构建问题描述
             if is_skipped:
@@ -690,7 +704,10 @@ class QwenClient:
             else:
                 issues_text = "无"
 
-            items_text += f"\n{i}. [{item_id}] {item_name} | 标准:{check_standard[:80]} | 评分规则:{scoring_rule[:200]} | 问题:{issues_text}"
+            if is_lizhi:
+                items_text += f"\n{i}. [{item_id}] {item_name} | 满分:{max_score} | 评分规则:{scoring_rule[:300]} | 问题:{issues_text}"
+            else:
+                items_text += f"\n{i}. [{item_id}] {item_name} | 标准:{check_standard[:80]} | 评分规则:{scoring_rule[:200]} | 问题:{issues_text}"
 
         # 完整 Prompt（含纠偏案例+记忆上下文）
         correction_text = _get_correction_examples(module_name)
@@ -795,6 +812,52 @@ class QwenClient:
 评分参考：0分
 参考理由：白名单过夜属于计费异常，规则明确"任一项不符合得0分"，直接判定0分"""
 
+        # ===== 砺质标准：覆盖为按各项 max_score 计分的评分体系（不影响蝶城/非蝶城） =====
+        if is_lizhi:
+            SYSTEM_PROMPT = """你是「砺质行动」物业品质检查评分专家，负责对砺质行动检查项进行 AI 评分。
+
+【检查体系】
+砺质行动检查（8月标准）按 5 个模块开展：管家礼韵塑新颜、安防礼韵塑新颜、环境礼韵塑新颜、技术礼韵塑新颜、其他场所5S。
+前 4 个模块每个满分 25 分，其他场所5S 只负责扣分。每个检查项有各自的满分（max_score），评分必须严格依据该检查项的「评分规则」字段。
+
+【评分原则】
+1. 评分范围为 0 到该检查项的「满分」（max_score），可为小数
+2. 严格按「评分规则」字段的计分办法评分：涉及"合格率/千户均投诉率"等按规则线性取值；涉及"无/轻微/严重"档位的按对应档位给分；涉及"每处/每人扣N分"的按数量累加扣分
+3. 无问题的检查项应给满分（= max_score）
+4. 先引用评分规则原文，再结合问题描述推导扣分与最终得分，写入 scoring_basis
+
+【异常输入识别】
+问题描述明显与检查内容无关（随意填写），score 取满分的一半，confidence 低于0.3，并在 scoring_basis 标注「问题描述疑似无效，建议人工复核」。
+- scoring_basis 和 improvement_suggestion 中引用中文文字时，必须使用中文引号「」（不能使用英文双引号 "）
+- JSON 必须合法，不要输出 ```json 包装"""
+
+            FEW_SHOT_EXAMPLES = """
+【评分示例参考】（砺质行动计分，仅供参考思路，实际按各项评分规则独立判断）
+
+示例A【消防通道杂物率，满分20】
+评分规则：无杂物堆放得20分；杂物堆放轻微（不影响通行）得10分；严重（影响通行/火灾隐患）得0分；所有楼栋取平均分
+问题：抽5栋中3栋楼道有少量纸箱鞋柜（轻微，不影响通行），2栋无杂物
+评分参考：14分
+参考理由：3栋轻微（各10分）+2栋无杂物（各20分）取平均 = (10×3+20×2)/5 = 14分
+
+示例B【管家响应不及时投诉量，满分5】
+评分规则：月千户均投诉率为0得5分；为0.5得0分；其余线性取值
+问题：本月千户均投诉率0.1
+评分参考：4分
+参考理由：0→5分，0.5→0分线性，0.1对应 5×(1-0.1/0.5)=5×0.8=4分
+
+示例C【管家企微回复平均时长，满分10】
+评分规则：项目平均值低于20分钟得10分，每多1分钟扣1分
+问题：项目平均回复时长24分钟
+评分参考：6分
+参考理由：超出20分钟4分钟，扣4分，10-4=6分
+
+示例D【电梯轿厢+机房综合，满分15】
+评分规则：无问题15分；乘梯体验问题酌情扣；机房未上锁/风扇空调故障/年检过期/五方通话异常每项至少扣5分；所有电梯取平均分
+问题：抽3台电梯，1台轿厢空调故障（扣5），其余2台无问题
+评分参考：11.7分
+参考理由：(15-5 + 15 + 15)/3 = 40/3 ≈ 11.7分"""
+
         # 自我改进：注入偏差修正指令
         directive_text = ""
         try:
@@ -803,8 +866,14 @@ class QwenClient:
         except Exception as e:
             logger.debug(f"修正指令查询失败: {e}")
 
-        user_prompt = f"""对【{module_name}】模块的 {len(problem_items)} 个有问题检查项进行评分。
+        scale_note = (
+            "\n【计分说明】本检查采用砺质行动计分：每项评分范围为 0 ~ 该项「满分」（max_score），"
+            "严格按各项「评分规则」计分，无问题项给满分。\n"
+            if is_lizhi else ""
+        )
 
+        user_prompt = f"""对【{module_name}】模块的 {len(problem_items)} 个有问题检查项进行评分。
+{scale_note}
 {items_text}
 
 {FEW_SHOT_EXAMPLES}
@@ -837,12 +906,14 @@ class QwenClient:
                 logger.info(f"调用通义千问 API (尝试 {attempt + 1}/{max_retries})...")
 
                 # Prompt管理器：优先从DB读取，无记录则使用默认
+                # 砺质标准不读DB（DB中scoring_system为蝶城0-5分制定制），直接用内置砺质Prompt
                 _system_prompt = SYSTEM_PROMPT
-                try:
-                    from core.prompt_manager import prompt_manager
-                    _system_prompt = prompt_manager.get_prompt("scoring_system", SYSTEM_PROMPT)
-                except Exception:
-                    pass
+                if not is_lizhi:
+                    try:
+                        from core.prompt_manager import prompt_manager
+                        _system_prompt = prompt_manager.get_prompt("scoring_system", SYSTEM_PROMPT)
+                    except Exception:
+                        pass
 
                 client = httpx.AsyncClient(
                     timeout=httpx.Timeout(120.0, connect=10.0),
@@ -981,6 +1052,149 @@ class QwenClient:
         logger.error(f"{module_name} 所有模型均失败: {err_str}")
         return self._get_default_scores(problem_items, err_str)
 
+    async def _score_batch_lizhi(self, module_name: str, problem_items: List[Dict[str, Any]],
+                                  max_retries: int = 2, memory_context: str = "") -> List[Dict[str, Any]]:
+        """砺质专用评分：完全独立的 Prompt 体系，不与蝶城共享任何逻辑"""
+        import httpx as _httpx, json as _json, time as _time
+
+        # 构建检查项文本（每项标注其满分）
+        items_text = ""
+        for i, item in enumerate(problem_items, 1):
+            item_id = item.get("item_id", f"item-{i}")
+            item_name = item.get("item_name", "")
+            scoring_rule = item.get("scoring_rule", "")
+            max_score = item.get("max_score", 5)
+            issues = item.get("issues", [])
+            if item.get("is_skipped"):
+                issues_text = "跳过"
+            elif issues:
+                parts = []
+                for j, issue in enumerate(issues, 1):
+                    part = f"{j}. {issue.get('description', '无描述')}"
+                    if issue.get('severity'):
+                        part += f"（{issue.get('severity')}）"
+                    parts.append(part)
+                issues_text = "；".join(parts)
+            else:
+                issues_text = "无"
+            items_text += f"\n{i}. [{item_id}] {item_name}\n   满分：{max_score}\n   评分规则：{scoring_rule[:300]}\n   发现问题：{issues_text}"
+
+        SYSTEM_PROMPT = """你是「砺质行动」物业品质检查 AI 评分专家。你只使用砺质检查标准（8月版），不使用任何其他标准。
+
+【砺质检查体系】
+5个模块：管家礼韵塑新颜（25分）、安防礼韵塑新颜（25分）、环境礼韵塑新颜（25分）、技术礼韵塑新颜（25分）、其他场所5S（只扣分）。
+每个检查项有各自的满分（max_score）。前4个模块满分各25分，其他场所5S负责扣分。项目总分=4个计分模块之和−其他场所5S扣分（最高100）。
+
+【评分方法】
+- 你必须严格按每个检查项的「评分规则」评分，不得套用任何其他评分体系
+- 每个检查项的评分范围是 0 到它的「满分」（max_score）
+- 无问题项给满分（=max_score）
+- 涉及"合格率""千户均投诉率"等百分比/比率：按评分规则中的线性/档位公式计算具体分数
+- 涉及"无/轻微/严重"档位：按对应档位分值给分，多个样本取平均
+- 涉及"每处/每人扣N分"：按问题数量累加扣分
+- 评分可以是小数（如7.5分、11.7分），保留合理精度
+- 如果评分规则是"酌情扣分"，根据问题严重程度在0到max_score之间判断
+
+【输出要求】
+- 输出严格JSON数组，不含```json```包装
+- 每项输出 item_id、score（数值）、scoring_basis（先引用评分规则原文，再根据问题推导具体分数）、improvement_suggestion、confidence（0-1）
+- scoring_basis 中必须展示计分推导过程（如"满分20×3栋无杂物+10×2栋轻微=80/5=16分"）
+- 中文引号使用「」"""
+
+        FEW_SHOT = """
+【砺质评分示例】
+
+示例1：消防通道杂物率，满分20
+评分规则：无杂物堆放得20分；轻微存在（不影响通行）得10分；严重存在（影响通行、火灾隐患）得0分；所有楼栋取平均
+问题：抽查5栋，1栋无杂物，3栋轻微杂物，1栋严重杂物
+评分：{score: 8.0, scoring_basis: "按评分规则：1栋无杂物=20分，3栋轻微=10×3=30分，1栋严重=0分，(20+30+0)/5=10分", improvement_suggestion: "针对严重杂物楼栋，建议限期清理并张贴消防风险提示函", confidence: 0.9}
+
+示例2：垃圾桶整洁，满分10
+评分规则：合格率100%得10分；合格率0%得0分；其余线性取值
+问题：抽查5个点位，3个合格，2个桶身有污迹
+评分：{score: 6.0, scoring_basis: "按评分规则：合格率3/5=60%，线性计算 10×60%=6.0分", improvement_suggestion: "建议加强垃圾桶日常清洗频次", confidence: 0.95}
+
+示例3：管家企微回复平均时长，满分10
+评分规则：项目平均值低于20分钟得10分，每多1分钟扣1分
+问题：项目平均回复时长24分钟
+评分：{score: 6.0, scoring_basis: "按评分规则：24分钟超出20分钟门槛4分钟，每多1分钟扣1分，10-4=6分", improvement_suggestion: "建议优化回复流程，目标控制在20分钟以内", confidence: 0.95}
+
+示例4：电梯困人次数，满分5
+评分规则：未发生电梯困人得5分；发生电梯困人不得分
+问题：本月发生1次电梯困人
+评分：{score: 0.0, scoring_basis: "按评分规则：本月发生1次电梯困人，不得分", improvement_suggestion: "建议立即排查电梯故障原因并安排维保", confidence: 1.0}
+"""
+
+        user_prompt = f"""对【{module_name}】模块的 {len(problem_items)} 个检查项进行砺质评分。
+
+{items_text}
+
+{FEW_SHOT}
+{memory_context}
+
+请为以上每个检查项输出评分结果，JSON数组格式：
+[
+  {{
+    "item_id": "检查项ID",
+    "score": <分数，0到该项max_score>,
+    "scoring_basis": "<评分依据，引用评分规则原文并推导具体分数>",
+    "improvement_suggestion": "<具体可执行的改进建议>",
+    "confidence": <置信度0-1>
+  }}
+]"""
+
+        last_error = None
+        for attempt in range(max_retries):
+            try:
+                if attempt > 0:
+                    import asyncio as _asyncio
+                    await _asyncio.sleep(2 ** attempt)
+
+                logger.info(f"砺质API评分 (attempt {attempt + 1}/{max_retries})...")
+                client = _httpx.AsyncClient(timeout=_httpx.Timeout(120.0, connect=10.0))
+                try:
+                    response = await client.post(
+                        f"{self.base_url}/chat/completions",
+                        headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
+                        json={"model": self.model, "messages": [
+                            {"role": "system", "content": SYSTEM_PROMPT},
+                            {"role": "user", "content": user_prompt}
+                        ], "temperature": 0.1}
+                    )
+                finally:
+                    await client.aclose()
+
+                if response.status_code == 429:
+                    last_error = Exception("API rate limit")
+                    continue
+                if response.status_code != 200:
+                    raise Exception(f"API error: {response.status_code}")
+
+                result = response.json()
+                duration = int((_time.time() - _time.time()) * 1000)
+                _log_llm_usage(self.model, "scoring_lizhi", result, 0)
+                content = result["choices"][0]["message"]["content"]
+                score_results = _extract_json_array(content)
+                if score_results is None:
+                    raise _json.JSONDecodeError("Invalid JSON array", content, 0)
+
+                results = self._match_ai_results(score_results, problem_items, module_name)
+                logger.info(f"砺质评分完成: {module_name} ({len(results)}项)")
+                return results
+
+            except _json.JSONDecodeError as e:
+                last_error = e
+                if attempt == max_retries - 1:
+                    return self._get_default_scores(problem_items, "砺质AI返回格式解析失败")
+            except Exception as e:
+                last_error = e
+                if "429" in str(e) or "rate" in str(e).lower():
+                    continue
+                if attempt == max_retries - 1:
+                    return self._get_default_scores(problem_items, str(e))
+
+        return self._get_default_scores(problem_items, str(last_error))
+
     def _get_default_scores(self, items: List[Dict[str, Any]], error_msg: str = "") -> List[Dict[str, Any]]:
         """生成默认分数（当AI评分失败时）"""
         # 防御：对 error_msg 做全面净化，确保永远不会有空内容
@@ -998,14 +1212,15 @@ class QwenClient:
         error_msg = error_msg_clean
         results = []
         for item in items:
+            full = item.get("max_score", 5)  # 砺质各项有独立满分；蝶城默认5
             if item.get("is_skipped"):
-                score = 5.0
+                score = full
                 basis = "跳过项，自动满分"
             elif item.get("issues"):
-                score = 3.0
+                score = round(full * 0.6, 1) if full != 5 else 3.0
                 basis = f"评分异常({error_msg})，根据存在问题给予中等分数"
             else:
-                score = 5.0
+                score = full
                 basis = f"评分异常({error_msg})，无问题给予满分"
 
             results.append({
@@ -1260,6 +1475,52 @@ class QwenClient:
             return f"分析生成失败: {str(e)}"
 
 
+def _ds_standard_context(standard_type: str) -> dict:
+    """DeepSeek 报告/分析 Prompt 的「检查体系背景」按 standard_type 提供。
+    蝶城/非蝶城返回既有的八大模块5分制背景；砺质返回5模块+4×25+扣分背景。"""
+    if standard_type == "lizhi":
+        return {
+            "background": (
+                "本检查采用「砺质行动」检查标准（8月版），围绕5个模块开展：\n"
+                "- 管家礼韵塑新颜（满分25）：管家2341抽查、幸福驿站形象展示、响应不及时/服务态度投诉量\n"
+                "- 安防礼韵塑新颜（满分25）：消防通道杂物堆放治理、安全岗亭形象展示、消防通道堵塞/服务态度投诉量\n"
+                "- 环境礼韵塑新颜（满分25）：垃圾桶整洁、环境岗形象展示、垃圾清运不及时/服务态度投诉量\n"
+                "- 技术礼韵塑新颜（满分25）：电梯轿厢与机房、技术岗形象展示、乘梯体验/服务态度投诉量、休闲椅凳焕新、路灯焕新\n"
+                "- 其他场所5S（只扣分）：工作场所5S，每发现1处不合格扣3分\n\n"
+                "砺质计分：每个检查项有各自满分(max_score)，按各项评分规则评分；"
+                "前4个模块各封顶25分，其他场所5S只扣分；项目总分=四个计分模块之和−其他场所5S扣分，满分100。"
+            ),
+            "scoring_rule": (
+                "评分规则说明：检查采用「砺质行动」检查标准（8月版），5个模块（管家礼韵塑新颜、"
+                "安防礼韵塑新颜、环境礼韵塑新颜、技术礼韵塑新颜各满分25，其他场所5S只扣分），"
+                "项目总分=四个计分模块之和−其他场所5S扣分，满分100。"
+            ),
+            "system_suffix": (
+                "\n\n注意：本次为「砺质行动」检查（5模块、4×25+扣分=100），"
+                "分析请基于砺质体系与各项max_score计分，不要套用八大模块5分制。"
+            ),
+        }
+    return {
+        "background": (
+            "本检查采用物业品质内审检查标准V3.0（标准版/简化版），涵盖8大模块：\n"
+            "- 客户服务（15%）：管家服务、客户信息管理、投诉处理、社区文化、便民服务、装修管理等\n"
+            "- 安全管理（15%）：人行/车行出入口、门岗管理、消防管理、秩序维护、应急预案等\n"
+            "- EHS及风险管理（10%）：职业健康安全、特种作业、防汛防寒、泳池安全、值班管理等\n"
+            "- 环境管理（15%）：保洁质量、绿化养护、消杀管理、垃圾清运、垃圾分类等\n"
+            "- 机电运维（15%）：供配电、给排水、电梯、消防设施、弱电系统等\n"
+            "- 设施维护（15%）：房屋本体、公共设施、装修管理、充电桩、能耗管理等\n"
+            "- 综合管理（10%）：品质督导、数字化建设、档案管理、仓库管理、办公区管理等\n"
+            "- 财务管理（5%）：收费管控、票据管理、固定资产、公共资源经营等\n\n"
+            "评分采用5分制，根据每项权重加权计算模块百分制得分。"
+        ),
+        "scoring_rule": (
+            "评分规则说明：检查采用物业品质内审检查标准V3.0，涵盖8大模块（客户服务15%、安全管理15%、EHS及风险管理10%、环境管理15%、机电运维15%、设施维护15%、综合管理10%、财务管理5%），"
+            "各模块检查项采用5分制评分，根据权重加权计算模块百分制得分，再按模块权重汇总项目总分。"
+        ),
+        "system_suffix": "",
+    }
+
+
 class DeepSeekClient:
     """DeepSeek客户端（用于Agent 3报告生成）"""
 
@@ -1341,7 +1602,8 @@ class DeepSeekClient:
         project_name: str,
         inspection_date: str,
         module_summaries: list,
-        total_score: float
+        total_score: float,
+        standard_type: str = "diecheng",
     ) -> str:
         """
         生成完整的检查报告
@@ -1351,6 +1613,7 @@ class DeepSeekClient:
             inspection_date: 检查日期
             module_summaries: 各模块摘要列表
             total_score: 项目总分
+            standard_type: 检查标准（影响报告中的检查体系描述）
 
         Returns:
             完整报告文本
@@ -1359,12 +1622,13 @@ class DeepSeekClient:
             return "报告生成需要配置 DEEPSEEK_API_KEY"
 
         prompt = self._build_report_prompt(
-            project_name, inspection_date, module_summaries, total_score
+            project_name, inspection_date, module_summaries, total_score, standard_type
         )
 
         try:
             client = await self.get_client()
             start = _time.time()
+            std_ctx = _ds_standard_context(standard_type)
             response = await client.post(
                 f"{self.base_url}/chat/completions",
                 headers={
@@ -1376,7 +1640,7 @@ class DeepSeekClient:
                     "messages": [
                         {
                             "role": "system",
-                            "content": self.SYSTEM_PROMPT + "\n\n当前任务：根据各模块的检查分析结果，生成一份完整的物业内审检查综合报告。\n【新增要求】\n1. 必须包含根因分析章节（从制度/人员/资源/外部协同四个维度）\n2. 必须识别跨模块共性问题并分析责任归属\n3. 整改建议必须明确责任方（项目/阵地/供应商）和完成时间节点\n4. 必须包含检查亮点章节，不得省略"
+                            "content": self.SYSTEM_PROMPT + std_ctx["system_suffix"] + "\n\n当前任务：根据各模块的检查分析结果，生成一份完整的物业内审检查综合报告。\n【新增要求】\n1. 必须包含根因分析章节（从制度/人员/资源/外部协同四个维度）\n2. 必须识别跨模块共性问题并分析责任归属\n3. 整改建议必须明确责任方（项目/阵地/供应商）和完成时间节点\n4. 必须包含检查亮点章节，不得省略"
                         },
                         {"role": "user", "content": prompt}
                     ],
@@ -1437,22 +1701,26 @@ class DeepSeekClient:
         module_name: str,
         module_score: float,
         items: list,
-        memory_context: str = ""
+        memory_context: str = "",
+        standard_type: str = "diecheng",
     ) -> dict:
         """
         分析单个模块的检查情况
 
         Args:
             module_name: 模块名称
-            module_score: 模块得分（百分制）
+            module_score: 模块得分（百分制/砺质为模块得分）
             items: 检查项列表（包含分数和问题）
             memory_context: 该项目历史记忆上下文（可选，来自长期记忆）
+            standard_type: 检查标准（影响检查体系背景描述）
 
         Returns:
             模块分析结果
         """
         if not self.api_key:
             return {"error": "DEEPSEEK_API_KEY 未配置"}
+
+        std_ctx = _ds_standard_context(standard_type)
 
         # 历史记忆段落（仅在有记忆时注入，无记忆则保持原行为，零风险）
         memory_section = ""
@@ -1465,28 +1733,19 @@ class DeepSeekClient:
 请在分析中结合历史记忆：若发现反复出现的问题（recurring_issue），应在 main_issues 中明确标注"历史重复问题"并强调；若发现改善趋势，也应在评价中体现。
 """
 
+        score_label = "模块得分（满分25）" if standard_type == "lizhi" else "模块得分（百分制）"
         prompt = f"""你是物业品质检查分析专家。请根据以下模块的检查评分数据，对该模块的物业品质管理情况进行专业分析。
 
 【模块信息】
 模块名称：{module_name}
-模块得分（百分制）：{module_score:.2f}分
+{score_label}：{module_score:.2f}分
 检查项数量：{len(items)}项{memory_section}
 
 【检查项详情（含评分、权重、检查标准、问题记录）】
 {json.dumps(items, ensure_ascii=False, indent=2)}
 
 【检查体系背景】
-本检查采用物业品质内审检查标准V3.0（标准版/简化版），涵盖8大模块：
-- 客户服务（15%）：管家服务、客户信息管理、投诉处理、社区文化、便民服务、装修管理等
-- 安全管理（15%）：人行/车行出入口、门岗管理、消防管理、秩序维护、应急预案等
-- EHS及风险管理（10%）：职业健康安全、特种作业、防汛防寒、泳池安全、值班管理等
-- 环境管理（15%）：保洁质量、绿化养护、消杀管理、垃圾清运、垃圾分类等
-- 机电运维（15%）：供配电、给排水、电梯、消防设施、弱电系统等
-- 设施维护（15%）：房屋本体、公共设施、装修管理、充电桩、能耗管理等
-- 综合管理（10%）：品质督导、数字化建设、档案管理、仓库管理、办公区管理等
-- 财务管理（5%）：收费管控、票据管理、固定资产、公共资源经营等
-
-评分采用5分制，根据每项权重加权计算模块百分制得分。
+{std_ctx['background']}
 
 【分析要求】
 1. 逐项审视得分情况，重点关注扣分项和问题项
@@ -1523,7 +1782,7 @@ class DeepSeekClient:
                     "messages": [
                         {
                             "role": "system",
-                            "content": self.SYSTEM_PROMPT + "\n\n当前任务：对单个模块的检查评分数据进行分析，输出该模块的整体评价、主要问题和改进建议。输出必须是合法的JSON格式。\n【额外要求】\n1. 得分<70分的模块必须包含根因分析，不能仅罗列问题\n2. 改进建议必须包含责任方（谁做）、具体动作（做什么）、操作要点（怎么做）\n3. 分析应区分偶发性问题与系统性问题"
+                            "content": self.SYSTEM_PROMPT + std_ctx["system_suffix"] + "\n\n当前任务：对单个模块的检查评分数据进行分析，输出该模块的整体评价、主要问题和改进建议。输出必须是合法的JSON格式。\n【额外要求】\n1. 得分<70分的模块必须包含根因分析，不能仅罗列问题\n2. 改进建议必须包含责任方（谁做）、具体动作（做什么）、操作要点（怎么做）\n3. 分析应区分偶发性问题与系统性问题"
                         },
                         {"role": "user", "content": prompt}
                     ],
@@ -1561,10 +1820,12 @@ class DeepSeekClient:
         project_name: str,
         inspection_date: str,
         module_summaries: list,
-        total_score: float
+        total_score: float,
+        standard_type: str = "diecheng",
     ) -> str:
         """构建报告生成的Prompt"""
 
+        std_ctx = _ds_standard_context(standard_type)
         # 按得分从低到高排序，便于优先关注低分模块
         sorted_summaries = sorted(module_summaries, key=lambda x: x.get('score', 0))
 
@@ -1596,7 +1857,7 @@ class DeepSeekClient:
 项目总分：{total_score:.2f}分（满分100分）
 等级评定：{grade}
 
-评分规则说明：检查采用物业品质内审检查标准V3.0，涵盖8大模块（客户服务15%、安全管理15%、EHS及风险管理10%、环境管理15%、机电运维15%、设施维护15%、综合管理10%、财务管理5%），各模块检查项采用5分制评分，根据权重加权计算模块百分制得分，再按模块权重汇总项目总分。
+{std_ctx['scoring_rule']}
 
 【各模块检查结果摘要】（按得分从低到高排列）
 {summaries_text}
@@ -1736,7 +1997,7 @@ class DeepSeekClient:
 {label_a}：总分 {summary_a.get('total_score', 0):.2f} | 严重问题 {summary_a.get('serious_count', 0)} 项、一般问题 {summary_a.get('general_count', 0)} 项、轻微问题 {summary_a.get('minor_count', 0)} 项
 {label_b}：总分 {summary_b.get('total_score', 0):.2f} | 严重问题 {summary_b.get('serious_count', 0)} 项、一般问题 {summary_b.get('general_count', 0)} 项、轻微问题 {summary_b.get('minor_count', 0)} 项
 
-【八大模块对比矩阵】
+【各模块对比矩阵】
 {matrix_text}
 
 【模块分析详情】

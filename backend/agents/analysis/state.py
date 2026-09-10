@@ -26,10 +26,10 @@ class AnalysisState(TypedDict, total=False):
     label_b: str                        # 对象B 标签
 
     # === 三维度分析输出 ===
-    comparison_matrix: list             # 8模块对比矩阵
+    comparison_matrix: list             # 各模块对比矩阵（按报告实际模块，蝶城8/砺质5）
     score_analysis: dict                # 维度一: 综合得分分析
     issue_analysis: dict                # 维度二: 问题分布分析
-    module_analysis: dict               # 维度三: 8模块逐一分析
+    module_analysis: dict               # 维度三: 逐模块分析
 
     # === 洞察生成输出 ===
     ai_result: dict                     # LLM 返回的完整分析结果

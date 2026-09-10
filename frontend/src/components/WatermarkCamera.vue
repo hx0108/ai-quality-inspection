@@ -176,6 +176,9 @@ const onAlbumSelect = (e) => {
   }
   albumInput.value.value = ''
 }
+
+// 供父组件直接触发拍摄（如卡片式巡检的大拍照区）
+defineExpose({ triggerWatermark, triggerCamera, triggerAlbum })
 </script>
 
 <style scoped>
@@ -210,8 +213,8 @@ const onAlbumSelect = (e) => {
 }
 
 .action-btn.primary {
-  background: #2563eb;
-  border-color: #2563eb;
+  background: var(--blue);
+  border-color: var(--blue);
   color: #fff;
 }
 

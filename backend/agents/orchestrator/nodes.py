@@ -420,8 +420,13 @@ async def finalize(state: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _get_module_scores(db, task_id: str) -> List[Dict[str, Any]]:
-    """获取各模块得分"""
-    from models.models import ScoringResult, InspectionRecord
+    """获取各模块得分（按任务 standard_type 选择计分模型）"""
+    from models.models import ScoringResult, InspectionRecord, InspectionTask
+    from core.scoring_aggregation import aggregate
+    from core import standards as _stds
+
+    task = db.query(InspectionTask).filter(InspectionTask.task_id == task_id).first()
+    std_type = task.standard_type if task else "diecheng"
 
     results = db.query(ScoringResult).join(
         InspectionRecord, ScoringResult.record_id == InspectionRecord.record_id
@@ -429,21 +434,23 @@ def _get_module_scores(db, task_id: str) -> List[Dict[str, Any]]:
 
     modules = {}
     for r in results:
-        if r.module_name not in modules:
-            modules[r.module_name] = {"raw_sum": 0, "weight_sum": 0}
-        modules[r.module_name]["raw_sum"] += float(r.weighted_score)
+        modules.setdefault(r.module_name, {"raw_score_sum": 0, "weight_sum": 0})
+        modules[r.module_name]["raw_score_sum"] += float(r.weighted_score)
         modules[r.module_name]["weight_sum"] += float(r.weight)
 
+    agg = aggregate(std_type, modules)
     module_scores = []
-    for module_name, data in modules.items():
-        if data["weight_sum"] > 0:
-            max_score = 5 * data["weight_sum"]
-            pct = (data["raw_sum"] / max_score) * 100
-            module_scores.append({
-                "module_name": module_name,
-                "module_pct_score": round(pct, 2),
-                "weight_ratio": settings.MODULE_WEIGHTS.get(module_name, 0)
-            })
+    for module_name in _stds.get_modules(std_type):
+        if module_name not in modules:  # 仅返回已评分模块
+            continue
+        cfg = _stds.get_module_cfg(std_type, module_name)
+        module_scores.append({
+            "module_name": module_name,
+            "module_pct_score": round(agg["module_pct"].get(module_name, 0), 2),
+            "weight_ratio": cfg.get("weight", 0),
+            "max_score": cfg.get("max_score"),
+            "role": cfg.get("role", "score"),
+        })
 
     return module_scores
 

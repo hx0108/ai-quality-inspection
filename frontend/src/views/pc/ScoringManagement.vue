@@ -11,43 +11,27 @@
         </div>
       </div>
 
-      <!-- KPI 统计卡片 -->
+      <!-- KPI 统计卡片（原型结构：无图标，标签+大数字+轻量片） -->
       <div class="kpi-row cols-4">
         <div class="kpi">
-          <div class="kpi-icon" style="background:var(--warn-bg);color:var(--warn)">
-            <el-icon :size="18"><Warning /></el-icon>
-          </div>
-          <div class="kpi-body">
-            <span class="kpi-label">待复核</span>
-            <span class="kpi-val">{{ stats.pending_count || 0 }}<span class="kpi-unit">件</span></span>
-          </div>
+          <div class="kpi-lbl">待复核</div>
+          <div class="kpi-num" :class="{ 'kpi-err': (stats.pending_count || 0) > 0 }">{{ stats.pending_count || 0 }}</div>
+          <div class="kpi-tags"><span class="ktag ktag-warn">优先处理</span></div>
         </div>
         <div class="kpi">
-          <div class="kpi-icon" style="background:var(--ok-bg);color:var(--ok)">
-            <el-icon :size="18"><CircleCheck /></el-icon>
-          </div>
-          <div class="kpi-body">
-            <span class="kpi-label">已复核</span>
-            <span class="kpi-val">{{ stats.reviewed_count || 0 }}<span class="kpi-unit">件</span></span>
-          </div>
+          <div class="kpi-lbl">已复核</div>
+          <div class="kpi-num">{{ stats.reviewed_count || 0 }}</div>
+          <div class="kpi-tags"><span class="ktag ktag-ok">完成</span></div>
         </div>
         <div class="kpi">
-          <div class="kpi-icon" style="background:var(--blue-bg);color:var(--blue)">
-            <el-icon :size="18"><Edit /></el-icon>
-          </div>
-          <div class="kpi-body">
-            <span class="kpi-label">已修改</span>
-            <span class="kpi-val">{{ stats.edited_count || 0 }}<span class="kpi-unit">件</span></span>
-          </div>
+          <div class="kpi-lbl">已修改</div>
+          <div class="kpi-num">{{ stats.edited_count || 0 }}</div>
+          <div class="kpi-tags"><span class="ktag ktag-brand">人工修正</span></div>
         </div>
         <div class="kpi">
-          <div class="kpi-icon" style="background:var(--bg-muted);color:var(--ink-600)">
-            <el-icon :size="18"><DataLine /></el-icon>
-          </div>
-          <div class="kpi-body">
-            <span class="kpi-label">低置信度占比</span>
-            <span class="kpi-val">{{ stats.low_confidence_rate || 0 }}<span class="kpi-unit">%</span></span>
-          </div>
+          <div class="kpi-lbl">低置信度占比</div>
+          <div class="kpi-num">{{ stats.low_confidence_rate || 0 }}<span class="kpi-unit">%</span></div>
+          <div class="kpi-tags"><span class="ktag ktag-muted">建议复核</span></div>
         </div>
       </div>
 
@@ -138,7 +122,7 @@
 
           <el-form label-position="top">
             <el-form-item label="修改评分">
-              <el-input-number v-model="reviewScore" :min="0" :max="5" :step="0.5" :precision="1" style="width:200px" />
+              <el-input-number v-model="reviewScore" :min="reviewMin" :max="reviewMax" :step="0.5" :precision="1" style="width:200px" />
             </el-form-item>
             <el-form-item label="复核备注">
               <el-input v-model="reviewNote" type="textarea" :rows="2" placeholder="可选：说明修改原因" />
@@ -157,7 +141,6 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { Warning, CircleCheck, Edit, DataLine } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { getAllPendingReviews, editScore } from '../../api/scoring'
 
@@ -169,7 +152,16 @@ const page = ref(1)
 const total = ref(0)
 const items = ref([])
 const stats = ref({})
-const moduleOptions = ref(['保洁管理', '秩序管理', '安全管理', '环境管理', '机电运维', '设施维护', '综合管理', '财务管理'])
+const moduleOptions = ref([])  // 动态：从结果数据中聚合实际出现的模块名（兼容任意标准）
+
+// 改分上下限：砺质扣分模块允许负分；计分项上限=单项max_score；蝶城0-5
+const reviewMax = computed(() => {
+  const it = reviewItem.value
+  if (!it) return 5
+  if (it.module_role === 'deduction') return 0
+  return it.item_max_score ?? it.module_max_score ?? 5
+})
+const reviewMin = computed(() => (reviewItem.value?.module_role === 'deduction' ? -100 : 0))
 
 const reviewVisible = ref(false)
 const reviewItem = ref(null)
@@ -189,6 +181,9 @@ async function fetchData() {
     items.value = data.items || []
     total.value = data.total || 0
     stats.value = data.stats || {}
+    // 动态聚合当前结果中出现的模块名（兼容蝶城/非蝶城/砺质）
+    const names = [...new Set(items.value.map(i => i.module_name).filter(Boolean))]
+    moduleOptions.value = names
   } catch (e) {
     console.error('获取评分数据失败:', e)
   } finally {
@@ -283,118 +278,9 @@ function goPage(p) {
 
 .loading-wrap { padding: 40px 0; }
 
-/* ==================== Page Header (prototype .phdr) ==================== */
-.phdr {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  margin-bottom: 20px;
-}
+/* phdr / kpi-row / kpi / ktag 样式由全局 design-upgrade.css v2 提供 */
 
-.phdr h1 {
-  font-size: 22px;
-  font-weight: 800;
-  color: var(--ink-900);
-  letter-spacing: -0.4px;
-  margin: 0;
-}
-
-.phdr-sub {
-  font-size: 13px;
-  color: var(--ink-400);
-  margin-top: 3px;
-}
-
-.phdr-acts {
-  display: flex;
-  gap: 8px;
-}
-
-/* ==================== KPI Row (prototype .kpi-row) ==================== */
-.kpi-row {
-  display: grid;
-  gap: 12px;
-  margin-bottom: 20px;
-}
-
-.kpi-row.cols-4 {
-  grid-template-columns: repeat(4, 1fr);
-}
-
-.kpi {
-  background: var(--bg-card);
-  border: 1px solid var(--ink-100);
-  border-radius: var(--r-lg);
-  padding: 18px 20px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  position: relative;
-  overflow: hidden;
-  transition: all 0.15s var(--ease);
-  animation: fadeInUp 0.3s var(--ease) both;
-}
-
-.kpi:nth-child(2) { animation-delay: 30ms; }
-.kpi:nth-child(3) { animation-delay: 60ms; }
-.kpi:nth-child(4) { animation-delay: 90ms; }
-
-.kpi::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 3px;
-  background: linear-gradient(90deg, var(--ink-200), var(--ink-100));
-}
-
-.kpi:first-child::before { background: linear-gradient(90deg, var(--warn), #fbbf24); }
-.kpi:nth-child(2)::before { background: linear-gradient(90deg, var(--ok), #34d399); }
-.kpi:nth-child(3)::before { background: linear-gradient(90deg, var(--blue), #60a5fa); }
-.kpi:nth-child(4)::before { background: linear-gradient(90deg, var(--ink-600), #a78bfa); }
-
-.kpi:hover {
-  border-color: var(--ink-200);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-}
-
-.kpi-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.kpi-body { flex: 1; min-width: 0; }
-
-.kpi-label {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink-400);
-  display: block;
-  margin-bottom: 6px;
-}
-
-.kpi-val {
-  font-family: var(--mono);
-  font-size: 32px;
-  font-weight: 700;
-  color: var(--ink-900);
-  display: block;
-  line-height: 1;
-  letter-spacing: -1.5px;
-}
-
-.kpi-unit {
-  font-family: var(--mono);
-  font-size: 16px;
-  font-weight: 500;
-  color: var(--ink-400);
-}
-
-/* ==================== Filters (prototype .filters) ==================== */
+/* ==================== Filters ==================== */
 .filters {
   display: flex;
   align-items: center;

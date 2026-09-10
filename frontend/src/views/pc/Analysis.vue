@@ -332,6 +332,7 @@ import {
   GridComponent, VisualMapComponent
 } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
+import { applyChartTheme } from '../../utils/chartTheme'
 
 echarts.use([
   BarChart, RadarChart, HeatmapChart,
@@ -432,9 +433,9 @@ const stepLabel = computed(() => {
 
 const progressColor = computed(() => {
   const pct = progressData.value.progress_pct
-  if (pct < 30) return '#409eff'
-  if (pct < 70) return '#e6a23c'
-  return '#67c23a'
+  if (pct < 30) return '#0f8a80'
+  if (pct < 70) return '#b07a12'
+  return '#27945b'
 })
 
 // === 方法 ===
@@ -565,25 +566,25 @@ function renderCharts() {
 
   const charts = result.value.chart_data
 
-  // 图表1: 柱状图 / 热力图
+  // 图表1: 柱状图 / 热力图（后端 option，setOption 前注入统一主题）
   if (charts.bar && chartContainer.value) {
     const c1 = echarts.init(chartContainer.value)
-    c1.setOption(charts.bar)
+    c1.setOption(applyChartTheme(charts.bar))
     chartInstances.push(c1)
   } else if (charts.heatmap && chartContainer.value) {
     const c1 = echarts.init(chartContainer.value)
-    c1.setOption(charts.heatmap)
+    c1.setOption(applyChartTheme(charts.heatmap))
     chartInstances.push(c1)
   } else if (charts.ranking_bar && chartContainer.value) {
     const c1 = echarts.init(chartContainer.value)
-    c1.setOption(charts.ranking_bar)
+    c1.setOption(applyChartTheme(charts.ranking_bar))
     chartInstances.push(c1)
   }
 
   // 图表2: 雷达图
   if (charts.radar && chartContainer2.value) {
     const c2 = echarts.init(chartContainer2.value)
-    c2.setOption(charts.radar)
+    c2.setOption(applyChartTheme(charts.radar))
     chartInstances.push(c2)
   }
 
@@ -705,45 +706,37 @@ onMounted(() => {
 }
 
 /* === Page header === */
-.phdr {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  margin-bottom: 20px;
-}
-.phdr h1 {
-  font-size: 22px;
-  font-weight: 800;
-  color: var(--ink-900);
-  letter-spacing: -0.4px;
-}
-.phdr-acts {
-  display: flex;
-  gap: 8px;
-}
 
-/* === Mode tabs (prototype style) === */
+/* === Mode tabs（原型 .seg 分段形态） === */
 .mode-tabs {
-  display: flex;
-  gap: 0;
+  display: inline-flex;
+  gap: 2px;
   margin-bottom: 18px;
-  border-bottom: 2px solid var(--ink-100);
+  padding: 2px;
+  background: var(--bg-muted);
+  border: 1px solid var(--ink-200);
+  border-radius: var(--r);
 }
 .mode-tab {
-  padding: 8px 18px;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--ink-400);
+  padding: 0 14px;
+  height: 28px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-600);
   cursor: pointer;
   border: none;
-  background: none;
+  background: transparent;
+  border-radius: var(--r-sm);
   font-family: var(--sans);
-  border-bottom: 2px solid transparent;
-  margin-bottom: -2px;
   transition: all 0.12s;
 }
-.mode-tab:hover { color: var(--ink-800); }
-.mode-tab.on { color: var(--blue); border-bottom-color: var(--blue); }
+.mode-tab:hover { color: var(--ink-900); }
+.mode-tab.on {
+  background: var(--bg-card);
+  color: var(--ink-900);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(22, 22, 28, 0.08);
+}
 
 /* === Mode panels === */
 .mode-panel { display: none; }
@@ -800,46 +793,6 @@ onMounted(() => {
 }
 
 /* === Buttons (shared) === */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  border-radius: var(--r);
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.12s;
-  border: 1px solid var(--ink-100);
-  background: var(--bg-card);
-  color: var(--ink-800);
-  font-family: var(--sans);
-}
-.btn:hover {
-  background: var(--bg-muted);
-  border-color: var(--ink-200);
-}
-.btn svg {
-  width: 14px;
-  height: 14px;
-  stroke: currentColor;
-  fill: none;
-  stroke-width: 1.8;
-}
-.btn-primary {
-  background: var(--blue);
-  color: #fff;
-  border-color: var(--blue);
-}
-.btn-primary:hover {
-  background: #1d4ed8;
-  border-color: #1d4ed8;
-  color: #fff;
-}
-.btn-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
 
 /* === Cards (prototype style) === */
 .card {

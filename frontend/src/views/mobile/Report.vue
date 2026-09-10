@@ -21,7 +21,7 @@
     <div v-else-if="notFound" class="not-found-area">
       <van-empty description="报告尚未生成">
         <template #image>
-          <van-icon name="description" size="80" color="#2563eb" />
+          <van-icon name="description" size="80" color="var(--blue)" />
         </template>
         <van-button type="primary" @click="startGenerate" :loading="genLoading">
           生成 AI 分析报告
@@ -272,10 +272,10 @@ const getScoreClass = (score) => {
 
 const getProgressColor = (score) => {
   if (!score) return '#e5e5e5'
-  if (score >= 90) return '#059669'
-  if (score >= 80) return '#2563eb'
-  if (score >= 60) return '#d97706'
-  return '#dc2626'
+  if (score >= 90) return 'var(--ok-strong)'
+  if (score >= 80) return 'var(--blue)'
+  if (score >= 60) return 'var(--orange)'
+  return 'var(--err)'
 }
 
 onMounted(() => {
@@ -314,25 +314,25 @@ onMounted(() => {
 }
 
 .score-excellent {
-  color: #059669;
+  color: var(--ok-strong);
   font-weight: bold;
   font-size: 20px;
 }
 
 .score-good {
-  color: #2563eb;
+  color: var(--blue);
   font-weight: bold;
   font-size: 20px;
 }
 
 .score-normal {
-  color: #d97706;
+  color: var(--orange);
   font-weight: bold;
   font-size: 20px;
 }
 
 .score-poor {
-  color: #dc2626;
+  color: var(--err);
   font-weight: bold;
   font-size: 20px;
 }
@@ -383,7 +383,7 @@ onMounted(() => {
 }
 
 .gen-step {
-  color: #2563eb;
+  color: var(--blue);
   font-size: 14px;
   margin-top: 4px;
 }
@@ -408,7 +408,7 @@ onMounted(() => {
 }
 
 .analysis-score {
-  color: #2563eb;
+  color: var(--blue);
   font-size: 13px;
   font-weight: 600;
 }
@@ -425,7 +425,7 @@ onMounted(() => {
   background: #f7f8fa;
   padding: 10px 12px;
   border-radius: 8px;
-  border-left: 3px solid #2563eb;
+  border-left: 3px solid var(--blue);
 }
 
 .analysis-section {

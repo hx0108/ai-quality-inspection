@@ -7,7 +7,7 @@
         <el-option label="未检查" value="unchecked" />
       </el-select>
       <div class="drawer-top-bar" style="margin-left: 10px">
-        已检查：<strong style="color:#059669">{{ checkedCount }}</strong> / 总项目：<strong>{{ totalProjects }}</strong> / 覆盖率：<strong>{{ coverageRate }}%</strong>
+        已检查：<strong style="color:var(--ok-strong)">{{ checkedCount }}</strong> / 总项目：<strong>{{ totalProjects }}</strong> / 覆盖率：<strong>{{ coverageRate }}%</strong>
       </div>
       <el-button style="margin-left:auto" @click="$emit('export')">
         <el-icon style="margin-right:4px"><Download /></el-icon>导出

@@ -67,6 +67,53 @@ class Settings:
         "财务管理": 0.05,
     }
 
+    # ==================== 多标准注册表 ====================
+    # 按检查标准(standard_type)组织模块清单与计分模型。
+    # - weighted_5pt: 0-5分 × 权重 → 百分制加权平均 = 100（蝶城/非蝶城）
+    # - point_cap:    各项按自身分值打分，计分模块封顶 max_score，扣分模块只减分（砺质）
+    # MODULE_WEIGHTS 保留为蝶城默认权重的向后兼容别名。
+    STANDARDS: dict = {
+        "diecheng": {
+            "label": "蝶城版",
+            "scoring_model": "weighted_5pt",
+            "modules": {
+                "客户服务": {"weight": 0.15},
+                "安全管理": {"weight": 0.15},
+                "EHS及风险管理": {"weight": 0.10},
+                "环境管理": {"weight": 0.15},
+                "机电运维": {"weight": 0.15},
+                "设施维护": {"weight": 0.15},
+                "综合管理": {"weight": 0.10},
+                "财务管理": {"weight": 0.05},
+            },
+        },
+        "feidiecheng": {
+            "label": "非蝶城版",
+            "scoring_model": "weighted_5pt",
+            "modules": {
+                "客户服务": {"weight": 0.15},
+                "安全管理": {"weight": 0.15},
+                "EHS及风险管理": {"weight": 0.10},
+                "环境管理": {"weight": 0.15},
+                "机电运维": {"weight": 0.15},
+                "设施维护": {"weight": 0.15},
+                "综合管理": {"weight": 0.10},
+                "财务管理": {"weight": 0.05},
+            },
+        },
+        "lizhi": {
+            "label": "砺质版",
+            "scoring_model": "point_cap",
+            "modules": {
+                "管家礼韵塑新颜": {"max_score": 25, "role": "score"},
+                "安防礼韵塑新颜": {"max_score": 25, "role": "score"},
+                "环境礼韵塑新颜": {"max_score": 25, "role": "score"},
+                "技术礼韵塑新颜": {"max_score": 25, "role": "score"},
+                "其他场所5S": {"max_score": 0, "role": "deduction"},
+            },
+        },
+    }
+
     def __init__(self):
         # 确保目录存在
         self.DATA_DIR.mkdir(parents=True, exist_ok=True)

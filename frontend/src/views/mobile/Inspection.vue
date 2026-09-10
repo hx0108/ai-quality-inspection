@@ -24,7 +24,7 @@
           <span class="progress-label">{{ checkedCount }} / {{ items.length }} 已检查</span>
           <span class="progress-pct">{{ progress }}%</span>
         </div>
-        <van-progress :percentage="progress" stroke-width="8" :show-pivot="false" color="#059669" track-color="rgba(255,255,255,0.2)" />
+        <van-progress :percentage="progress" stroke-width="8" :show-pivot="false" color="var(--ok-strong)" track-color="rgba(255,255,255,0.2)" />
         <div class="action-row">
           <van-button size="small" type="primary" plain round @click="markAllQualified" :disabled="pendingCount === 0 || isCompleted">
             全部合格 ({{ pendingCount }}项)
@@ -85,7 +85,7 @@
 
     <!-- 加载错误提示 -->
     <div v-if="fetchError" class="fetch-error-box">
-      <van-icon name="warning-o" size="24" color="#dc2626" />
+      <van-icon name="warning-o" size="24" color="var(--err)" />
       <div class="fetch-error-msg">{{ fetchError }}</div>
       <van-button type="primary" size="small" @click="fetchRecord" style="margin-top: 8px;">重新加载</van-button>
     </div>
@@ -101,29 +101,32 @@
         v-for="item in filteredItems"
         :key="item.item_id"
         :data-item-id="item.item_id"
-        class="check-item"
+        class="chk-card"
         :class="getItemClass(item)"
       >
-        <div class="item-row" @click="toggleExpand(item)">
-          <van-checkbox
-            v-model="item.checked"
-            shape="square"
-            :disabled="isCompleted"
-            @click.stop="onCheckToggle(item)"
-          />
-          <div class="item-info">
-            <div class="item-name">{{ item.item_name }}</div>
-            <div class="item-method">{{ item.check_method }}</div>
+        <div class="chk-head" @click="toggleExpand(item)">
+          <span class="chk-id">{{ item.item_id }}</span>
+          <div class="chk-info">
+            <div class="chk-name">{{ item.item_name }}</div>
+            <div class="chk-method">{{ item.check_method }}</div>
           </div>
-          <div class="item-status">
-            <van-tag v-if="item.status === 'checked' && item.qualified && !item.has_issue" type="success">合格<van-icon v-if="item.isOffline" name="cloud-o" style="margin-left:2px" /></van-tag>
-            <van-tag v-else-if="item.has_issue && item.isOffline" type="danger">有问题<van-icon name="cloud-o" style="margin-left:2px" /></van-tag>
-            <van-tag v-else-if="item.has_issue" type="danger">有问题</van-tag>
-            <van-tag v-else-if="item.status === 'skipped'" type="default">跳过</van-tag>
-            <van-tag v-else type="warning">待检查</van-tag>
-          </div>
-          <van-icon v-if="expandedId === item.item_id" name="arrow-up" />
-          <van-icon v-else name="arrow-down" />
+          <span v-if="item.has_issue" class="kt kt-err">有问题<van-icon v-if="item.isOffline" name="cloud-o" style="margin-left:2px" /></span>
+          <span v-else-if="item.status === 'checked' && item.qualified" class="kt kt-ok">合格<van-icon v-if="item.isOffline" name="cloud-o" style="margin-left:2px" /></span>
+          <span v-else-if="item.status === 'skipped'" class="kt kt-muted">跳过</span>
+        </div>
+
+        <!-- 合格 / 有问题（原型：按钮直接上卡片） -->
+        <div v-if="!isCompleted" class="m-check-row">
+          <button
+            class="m-check-btn pass"
+            :class="{ on: item.status === 'checked' && item.qualified && !item.has_issue }"
+            @click="markQualified(item)"
+          >合格</button>
+          <button
+            class="m-check-btn fail"
+            :class="{ on: item.has_issue }"
+            @click="markIssue(item)"
+          >有问题</button>
         </div>
 
         <!-- 展开：显示检查标准详情 -->
@@ -260,21 +263,25 @@
           </van-field>
           <div class="issue-actions">
             <van-button size="small" @click="expandedId = null">取消</van-button>
-            <van-button size="small" type="danger" @click="submitIssue(item)" :loading="item.saving">保存问题</van-button>
+            <van-button size="small" type="primary" @click="submitIssue(item)" :loading="item.saving">保存问题</van-button>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- 底部完成栏 -->
+    <!-- 底部完成栏（原型：进度信息 + 主按钮） -->
     <div class="bottom-bar">
+      <div class="bb-info">
+        进度 <b>{{ checkedCount }}/{{ items.length }}</b>
+        <span class="bb-issues" v-if="issueCount > 0">问题 {{ issueCount }}</span>
+      </div>
       <van-button
         :type="isCompleted ? 'success' : 'primary'"
-        block
         round
         @click="completeInspection"
         :disabled="isCompleted"
         :loading="completing"
+        class="bb-btn"
       >
         {{ isCompleted ? '检查已完成' : `完成检查 (${progress}%)` }}
       </van-button>
@@ -616,6 +623,23 @@ const scrollToItem = (itemId) => {
   expandedId.value = itemId
   const el = document.querySelector(`[data-item-id="${itemId}"]`)
   if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+}
+
+// 卡片直按：标记合格（复用勾选逻辑）
+const markQualified = (item) => {
+  if (isCompleted.value) return
+  if (item.has_issue) {
+    showToast('该项已记录问题，请先删除问题再标合格')
+    return
+  }
+  item.checked = !item.checked
+  onCheckToggle(item)
+}
+
+// 卡片直按：有问题（展开问题表单）
+const markIssue = (item) => {
+  if (isCompleted.value) return
+  expandedId.value = expandedId.value === item.item_id ? null : item.item_id
 }
 
 const onCheckToggle = async (item) => {
@@ -1149,7 +1173,7 @@ onUnmounted(() => {
 /* AI 检查引导 */
 .guide-section {
   margin: 8px 12px;
-  background: linear-gradient(135deg, #eff6ff, #f0fdf4);
+  background: linear-gradient(135deg, var(--blue-bg), var(--ok-bg));
   border-radius: 10px;
   border: 1px solid #bfdbfe;
   overflow: hidden;
@@ -1164,7 +1188,7 @@ onUnmounted(() => {
 .guide-title {
   font-size: 13px;
   font-weight: 600;
-  color: #1d4ed8;
+  color: #0c7168;
 }
 .guide-content {
   padding: 0 12px 10px;
@@ -1196,7 +1220,7 @@ onUnmounted(() => {
   color: #6b7280;
 }
 .guide-item-id {
-  color: #2563eb;
+  color: var(--blue);
   font-weight: 500;
   min-width: 60px;
 }
@@ -1229,7 +1253,7 @@ onUnmounted(() => {
   cursor: pointer;
 }
 .guide-focus-item:active {
-  background: #eff6ff;
+  background: var(--blue-bg);
 }
 
 .fetch-error-box {
@@ -1243,7 +1267,7 @@ onUnmounted(() => {
 .fetch-error-msg {
   margin-top: 8px;
   font-size: 13px;
-  color: #dc2626;
+  color: var(--err);
   line-height: 1.5;
   word-break: break-all;
 }
@@ -1277,7 +1301,7 @@ onUnmounted(() => {
 .header-bg {
   position: absolute;
   inset: 0;
-  background: #2563eb;
+  background: var(--blue);
 }
 
 .header-content {
@@ -1310,64 +1334,100 @@ onUnmounted(() => {
 }
 
 .items-list {
-  padding: 8px 12px;
+  padding: 12px 14px 8px;
 }
 
-.check-item {
-  background: #fff;
-  border-radius: 10px;
-  margin-top: 8px;
+/* ===== 检查项卡（原型 .m-card 形态：编号chip + 名称 + 合格/有问题按钮） ===== */
+.chk-card {
+  background: var(--bg-card);
+  border: 1px solid var(--ink-200);
+  border-radius: 12px;
+  margin-bottom: 10px;
+  padding: 13px 14px;
   overflow: hidden;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.04);
 }
 
-.check-item.item-qualified {
-  border-left: 4px solid #059669;
+.chk-card.item-issue {
+  border-color: var(--err-border);
 }
 
-.check-item.item-issue {
-  border-left: 4px solid #dc2626;
-}
-
-.check-item.item-skipped {
-  border-left: 4px solid #9ba3af;
-  opacity: 0.65;
-}
-
-.item-row {
+.chk-head {
   display: flex;
-  align-items: center;
-  padding: 14px;
   gap: 10px;
+  align-items: flex-start;
+  cursor: pointer;
 }
 
-.item-row .van-checkbox {
+.chk-id {
   flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--mono);
+  color: var(--brand-ink);
+  background: var(--blue-bg);
+  border-radius: 5px;
+  padding: 2px 6px;
+  margin-top: 1px;
 }
 
-.item-info {
+.chk-info {
   flex: 1;
   min-width: 0;
 }
 
-.item-name {
-  font-size: 14px;
-  color: #1a1d26;
-  line-height: 1.4;
-  font-weight: 500;
+.chk-name {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--ink-900);
+  line-height: 1.45;
 }
 
-.item-method {
+.chk-method {
   font-size: 12px;
-  color: #9ba3af;
-  margin-top: 2px;
+  color: var(--ink-500);
+  margin-top: 3px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.item-status {
-  flex-shrink: 0;
+/* 合格 / 有问题（原型 m-check-btn） */
+.m-check-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 11px;
+}
+
+.m-check-btn {
+  flex: 1;
+  height: 38px;
+  border-radius: var(--r);
+  border: 1px solid var(--ink-200);
+  background: var(--bg-card);
+  font-family: var(--sans);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-600);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.12s;
+}
+
+.m-check-btn:active { transform: scale(0.98); }
+
+.m-check-btn.pass.on {
+  background: var(--ok-bg);
+  border-color: #b9e2cc;
+  color: var(--ok-strong);
+}
+
+.m-check-btn.fail.on {
+  background: var(--err-bg);
+  border-color: #f6c6c8;
+  color: var(--err-strong);
 }
 
 /* 检查标准详情 */
@@ -1388,7 +1448,7 @@ onUnmounted(() => {
 .standard-title {
   font-size: 13px;
   font-weight: 600;
-  color: #2563eb;
+  color: var(--blue);
   margin-bottom: 8px;
   padding-bottom: 6px;
   border-bottom: 1px solid #f0f0f0;
@@ -1486,9 +1546,36 @@ onUnmounted(() => {
   bottom: 0;
   left: 0;
   right: 0;
-  padding: 12px 16px;
-  background: #fff;
-  box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.06);
+  padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+  background: var(--bg-card);
+  border-top: 1px solid var(--ink-200);
   z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.bb-info {
+  font-size: 12.5px;
+  color: var(--ink-500);
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.bb-info b {
+  color: var(--ink-900);
+  font-variant-numeric: tabular-nums;
+}
+
+.bb-issues {
+  display: block;
+  color: var(--err-strong);
+  font-weight: 600;
+}
+
+.bb-btn {
+  flex: 1;
+  height: 42px;
+  font-weight: 700;
 }
 </style>

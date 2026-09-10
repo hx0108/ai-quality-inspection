@@ -1,118 +1,97 @@
 <template>
   <div class="dashboard-page">
-    <van-nav-bar title="数据概览">
-      <template #left>
-        <van-badge v-if="unreadCount > 0" :content="unreadCount > 99 ? '99+' : unreadCount" max="99">
-          <van-icon name="bell" size="20" @click="showNotifications = true" />
-        </van-badge>
-        <van-icon v-else name="bell" size="20" @click="showNotifications = true" />
-      </template>
-      <template #right>
-        <van-icon name="user-o" size="20" @click="showUser = true" />
-      </template>
-    </van-nav-bar>
+    <!-- 品牌头（青绿渐变） -->
+    <div class="hero">
+      <div class="hero-row">
+        <div class="hero-brand">
+          <div class="brand-mark"><van-icon name="passed" /></div>
+          <span class="brand-name">智能品质检查</span>
+        </div>
+        <div class="hero-acts">
+          <van-badge v-if="unreadCount > 0" :content="unreadCount > 99 ? '99+' : unreadCount" max="99">
+            <van-icon name="bell" size="20" color="#fff" @click="showNotifications = true" />
+          </van-badge>
+          <van-icon v-else name="bell" size="20" color="#fff" @click="showNotifications = true" />
+          <van-icon name="user-o" size="20" color="#fff" @click="showUser = true" />
+        </div>
+      </div>
+      <div class="hero-greet">
+        <div class="greet-line">{{ greeting }}，{{ userName }}</div>
+        <div class="greet-sub" @click="showCoverageSheet = true">
+          本月覆盖率 {{ summary.coverage_rate || 0 }}% · {{ summary.monthly_checked_projects || 0 }}/{{ summary.total_projects || 0 }} 项目
+          <van-icon name="arrow" />
+        </div>
+      </div>
+    </div>
 
     <div v-if="loading" class="loading-center">
       <van-loading size="24px" vertical>加载中...</van-loading>
     </div>
 
     <template v-else>
-      <!-- 统计卡片（用 m-stat-grid 独立命名，避免被全局 design-upgrade.css 的 stat-grid 3列规则覆盖）-->
-      <div class="m-stat-grid">
-        <div class="stat-card clickable" style="--accent: #2563eb; --accent-light: #EFF6FF" @click="openTaskSheet()">
-          <div class="stat-icon" style="background: var(--accent-light); color: var(--accent)">
-            <van-icon name="todo-list-o" size="22" />
-          </div>
-          <div class="stat-body">
-            <div class="stat-num">{{ summary.total_tasks || 0 }}</div>
-            <div class="stat-label">检查任务</div>
-            <div class="stat-tags">
-              <span class="stat-tag tag-warn">{{ summary.pending_tasks || 0 }}待处理</span>
-              <span class="stat-tag tag-blue">{{ summary.in_progress_tasks || 0 }}进行中</span>
-            </div>
+      <!-- KPI 2×2 -->
+      <div class="m-kpi-grid">
+        <div class="m-kpi clickable" @click="openTaskSheet()">
+          <div class="l">检查任务</div>
+          <div class="v">{{ summary.total_tasks || 0 }}</div>
+          <div class="t">
+            <span class="ktag ktag-muted">待处理 {{ summary.pending_tasks || 0 }}</span>
+            <span class="ktag ktag-brand">进行中 {{ summary.in_progress_tasks || 0 }}</span>
           </div>
         </div>
-        <div class="stat-card clickable" style="--accent: #059669; --accent-light: #ECFDF5" @click="showCoverageSheet=true">
-          <div class="stat-icon" style="background: var(--accent-light); color: var(--accent)">
-            <van-icon name="chart-trending-o" size="22" />
-          </div>
-          <div class="stat-body">
-            <div class="stat-num">{{ summary.coverage_rate || 0 }}<span class="stat-unit">%</span></div>
-            <div class="stat-label">本月覆盖率</div>
-            <div class="stat-tags">
-              <span class="stat-tag tag-green">{{ summary.monthly_checked_projects || 0 }}/{{ summary.total_projects || 0 }}项目</span>
-            </div>
+        <div class="m-kpi clickable" @click="openIssueSheet()">
+          <div class="l">问题总数</div>
+          <div class="v">{{ summary.total_issues || 0 }}</div>
+          <div class="t">
+            <span class="ktag ktag-err">严重 {{ summary.serious_issues || 0 }}</span>
+            <span class="ktag ktag-warn">一般 {{ summary.general_issues || 0 }}</span>
           </div>
         </div>
-        <div class="stat-card clickable" style="--accent: #f59e0b; --accent-light: #FFFBEB" @click="openRectSheet()">
-          <div class="stat-icon" style="background: var(--accent-light); color: var(--accent)">
-            <van-icon name="clock-o" size="22" />
-          </div>
-          <div class="stat-body">
-            <div class="stat-num">{{ summary.pending_rectifications || 0 }}</div>
-            <div class="stat-label">待整改</div>
-            <div class="stat-tags">
-              <span class="stat-tag tag-warn">已提交 {{ summary.submitted_rectifications || 0 }}</span>
-            </div>
-          </div>
+        <div class="m-kpi clickable" @click="openRectSheet()">
+          <div class="l">待整改</div>
+          <div class="v" :class="{ 'v-err': (summary.pending_rectifications || 0) > 0 }">{{ summary.pending_rectifications || 0 }}</div>
+          <div class="t"><span class="ktag ktag-muted">已提交 {{ summary.submitted_rectifications || 0 }}</span></div>
         </div>
-        <div class="stat-card clickable" style="--accent: #dc2626; --accent-light: #FEF2F2" @click="openIssueSheet()">
-          <div class="stat-icon" style="background: var(--accent-light); color: var(--accent)">
-            <van-icon name="warning-o" size="22" />
-          </div>
-          <div class="stat-body">
-            <div class="stat-num">{{ summary.total_issues || 0 }}</div>
-            <div class="stat-label">发现问题</div>
-            <div class="stat-tags">
-              <span class="stat-tag tag-red">{{ summary.serious_issues || 0 }}严重</span>
-              <span class="stat-tag tag-orange">{{ summary.general_issues || 0 }}一般</span>
-              <span class="stat-tag tag-gray">{{ summary.minor_issues || 0 }}轻微</span>
-            </div>
-          </div>
-        </div>
-        <div class="stat-card clickable" style="--accent: #059669; --accent-light: #ECFDF5" @click="openRectSheet()">
-          <div class="stat-icon" style="background: var(--accent-light); color: var(--accent)">
-            <van-icon name="passed" size="22" />
-          </div>
-          <div class="stat-body">
-            <div class="stat-num">{{ summary.rectification_rate || 0 }}<span class="stat-unit">%</span></div>
-            <div class="stat-label">整改完成率</div>
-            <div class="stat-tags">
-              <span class="stat-tag tag-green">已通过 {{ summary.approved_rectifications || 0 }}</span>
-            </div>
-          </div>
+        <div class="m-kpi clickable" @click="openRectSheet()">
+          <div class="l">整改完成率</div>
+          <div class="v">{{ summary.rectification_rate || 0 }}<small>%</small></div>
+          <div class="t"><span class="ktag ktag-ok">已通过 {{ summary.approved_rectifications || 0 }}</span></div>
         </div>
       </div>
 
       <!-- 各项目得分 -->
-      <div class="section-card">
-        <div class="section-title">各项目得分</div>
+      <div class="m-card">
+        <div class="m-card-h"><span class="m-card-t">各项目得分</span><span class="m-card-d">点击查看模块</span></div>
         <div v-if="projectScores.length === 0" class="section-empty">暂无数据</div>
-        <div v-for="p in projectScores" :key="p.project_name" class="score-row" @click="openProjectDetail(p)">
-          <div class="score-row-top">
-            <span class="score-name">{{ p.project_name }}</span>
-            <span class="score-value" :class="getScoreClass(p.latest_score)">{{ p.latest_score ?? '-' }}</span>
+        <div v-else>
+          <div v-for="p in projectScores" :key="p.project_name" class="proj-cell clickable" @click="openProjectDetail(p)">
+            <span class="proj-ico"><van-icon name="shield-o" /></span>
+            <div class="proj-gr">
+              <div class="proj-name">{{ p.project_name }}</div>
+              <div class="proj-sub">{{ moduleCount(p) }} 个模块</div>
+            </div>
+            <span class="sp-pill" :class="spClass(p.latest_score)">{{ p.latest_score != null ? Math.round(p.latest_score) : '–' }}</span>
+            <van-icon name="arrow" class="proj-arrow" />
           </div>
-          <van-progress :percentage="p.latest_score || 0" :stroke-width="6" :show-pivot="false"
-            :color="getProgressColor(p.latest_score)" track-color="#F1F5F9" />
         </div>
       </div>
 
-      <!-- 问题按模块分布 -->
-      <div class="section-card">
-        <div class="section-title">问题按模块分布</div>
+      <!-- 问题按模块分布（单色条形） -->
+      <div class="m-card">
+        <div class="m-card-h"><span class="m-card-t">问题集中模块</span><span class="m-card-d">点击查看明细</span></div>
         <div v-if="issueByModule.length === 0" class="section-empty">暂无数据</div>
-        <div class="module-grid">
-          <div v-for="m in issueByModule" :key="m.module_name" class="module-chip clickable" @click="openIssueSheet(m.module_name)">
-            <span class="module-chip-name">{{ m.module_name }}</span>
-            <span class="module-chip-count">{{ m.count }}</span>
+        <div v-else class="bar-list">
+          <div v-for="(m, i) in topModules" :key="m.module_name" class="bar-row clickable" @click="openIssueSheet(m.module_name)">
+            <span class="bar-lbl">{{ m.module_name }}</span>
+            <span class="bar-track"><span class="bar-fill" :style="{ width: (m.count / maxModuleCount) * 100 + '%', background: `var(--chart-ramp-${Math.min(i + 1, 5)})` }" /></span>
+            <span class="bar-val">{{ m.count }}</span>
           </div>
         </div>
       </div>
 
       <!-- 整改完成率 -->
-      <div class="section-card">
-        <div class="section-title">各项目整改完成率</div>
+      <div class="m-card">
+        <div class="m-card-h"><span class="m-card-t">各项目整改完成率</span></div>
         <div v-if="rectStats.length === 0" class="section-empty">暂无数据</div>
         <div v-else ref="rectChartRef" style="width:100%; height:420px;"></div>
       </div>
@@ -190,22 +169,16 @@
         <div v-for="(score, mod) in (selectedProject.modules || {})" :key="mod" class="module-score-row">
           <div class="module-score-top">
             <span class="module-score-name">{{ mod }}</span>
-            <span class="module-score-val" :class="getScoreClass(score)">{{ score != null ? score + '%' : '-' }}</span>
+            <span class="module-score-val" :class="scoreTextClass(score)">{{ score != null ? score + '%' : '-' }}</span>
           </div>
           <van-progress :percentage="score || 0" :stroke-width="6" :show-pivot="false"
-            :color="getProgressColor(score)" track-color="#F1F5F9" />
+            :color="getProgressColor(score)" track-color="#ececf0" />
         </div>
         <div v-if="!selectedProject.modules || Object.keys(selectedProject.modules || {}).length === 0" class="popup-empty">暂无评分数据</div>
       </div>
     </van-action-sheet>
 
-    <van-tabbar v-model="activeTab" route>
-      <van-tabbar-item icon="chart-trending-o" to="/dashboard">概览</van-tabbar-item>
-      <van-tabbar-item icon="home-o" to="/tasks">任务</van-tabbar-item>
-      <van-tabbar-item icon="todo-list-o" to="/reports">报告</van-tabbar-item>
-      <van-tabbar-item icon="shield-o" to="/rectification">整改</van-tabbar-item>
-      <van-tabbar-item icon="bar-chart-o" to="/analysis-mobile">分析</van-tabbar-item>
-    </van-tabbar>
+    <MobileTabbar />
 
     <MobileUserSheet v-model:show="showUser" />
 
@@ -242,12 +215,15 @@
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import MobileUserSheet from '../../components/MobileUserSheet.vue'
+import MobileTabbar from '../../components/MobileTabbar.vue'
 import echarts from '../../utils/echarts'
+import { useAuthStore } from '../../stores/auth'
 import { getDashboardStats } from '../../api/stats'
 import { getNotifications, getUnreadCount, markAsRead, markAllAsRead } from '../../api/notification'
 import { getAllRectifications } from '../../api/rectification'
 
 const router = useRouter()
+const authStore = useAuthStore()
 
 const loading = ref(true)
 const summary = ref({})
@@ -257,11 +233,24 @@ const rectStats = ref([])
 const rectChartRef = ref(null)
 let rectChart = null
 const coverageDetail = ref({ checked_projects: [], unchecked_projects: [] })
-const activeTab = ref(0)
 const showUser = ref(false)
 const showNotifications = ref(false)
 const notifications = ref([])
 const unreadCount = ref(0)
+
+const userName = computed(() => authStore.user?.real_name || authStore.user?.username || '同事')
+const greeting = computed(() => {
+  const h = new Date().getHours()
+  if (h < 6) return '夜深了'
+  if (h < 12) return '早上好'
+  if (h < 18) return '下午好'
+  return '晚上好'
+})
+
+const topModules = computed(() => [...issueByModule.value].sort((a, b) => b.count - a.count).slice(0, 5))
+const maxModuleCount = computed(() => Math.max(1, ...topModules.value.map(m => m.count)))
+
+const moduleCount = (p) => (p.modules ? Object.keys(p.modules).length : '–')
 
 // Popup states - independent refs for reliability
 const showTaskSheet = ref(false)
@@ -327,11 +316,11 @@ const renderRectChart = () => {
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'shadow' },
-      backgroundColor: 'rgba(255, 255, 255, 0.96)',
-      borderColor: '#E2E8F0',
+      backgroundColor: '#ffffff',
+      borderColor: '#e4e4e9',
       borderWidth: 1,
-      textStyle: { color: '#18181b', fontSize: 13 },
-      extraCssText: 'box-shadow: 0 4px 12px rgba(0,0,0,0.08); border-radius: 8px;',
+      textStyle: { color: '#2c2c38', fontSize: 12 },
+      extraCssText: 'box-shadow: 0 4px 16px rgba(22,22,28,.10); border-radius: 8px;',
       formatter: (params) => {
         const name = params[0].name
         const approved = params.find(p => p.seriesName === '已整改')?.value || 0
@@ -339,16 +328,16 @@ const renderRectChart = () => {
         const total = approved + pending
         const rate = total > 0 ? ((approved / total) * 100).toFixed(1) : 0
         return `<div style="font-weight:600;margin-bottom:4px">${name}</div>` +
-          `<div>已整改：<span style="color:#16a34a;font-weight:600">${approved}</span></div>` +
-          `<div>未整改：<span style="color:#dc2626;font-weight:600">${pending}</span></div>` +
-          `<div style="margin-top:4px;border-top:1px solid #eee;padding-top:4px">完成率：<b>${rate}%</b></div>`
+          `<div>已整改：<span style="color:#27945b;font-weight:600">${approved}</span></div>` +
+          `<div>未整改：<span style="color:#61616d;font-weight:600">${pending}</span></div>` +
+          `<div style="margin-top:4px;border-top:1px solid #ececf0;padding-top:4px">完成率：<b>${rate}%</b></div>`
       }
     },
     legend: {
       data: ['已整改', '未整改'],
       top: 0,
       right: 10,
-      textStyle: { fontSize: 11, color: '#52525b' },
+      textStyle: { fontSize: 11, color: '#474753' },
       itemWidth: 10,
       itemHeight: 10,
       itemGap: 12
@@ -358,15 +347,15 @@ const renderRectChart = () => {
       type: 'value',
       axisLine: { show: false },
       axisTick: { show: false },
-      splitLine: { lineStyle: { color: '#f4f4f5', type: 'dashed' } },
-      axisLabel: { color: '#94A3B8', fontSize: 10 }
+      splitLine: { lineStyle: { color: '#ececf0', type: 'dashed' } },
+      axisLabel: { color: '#a4a4af', fontSize: 10 }
     },
     yAxis: {
       type: 'category',
       data: data.map(i => i.project_name),
       axisLine: { show: false },
       axisTick: { show: false },
-      axisLabel: { fontSize: 11, color: '#52525b', width: 70, overflow: 'truncate' }
+      axisLabel: { fontSize: 11, color: '#474753', width: 70, overflow: 'truncate' }
     },
     series: [
       {
@@ -374,12 +363,7 @@ const renderRectChart = () => {
         type: 'bar',
         stack: 'total',
         data: data.map(i => i.approved),
-        itemStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
-            { offset: 0, color: '#16a34a' },
-            { offset: 1, color: '#34D399' }
-          ])
-        },
+        itemStyle: { color: '#27945b' },
         barWidth: 14,
       },
       {
@@ -387,13 +371,7 @@ const renderRectChart = () => {
         type: 'bar',
         stack: 'total',
         data: data.map(i => i.pending),
-        itemStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
-            { offset: 0, color: '#F87171' },
-            { offset: 1, color: '#FCA5A5' }
-          ]),
-          borderRadius: [0, 4, 4, 0]
-        },
+        itemStyle: { color: '#c9c9d1', borderRadius: [0, 4, 4, 0] },
         barWidth: 14,
       }
     ]
@@ -485,16 +463,25 @@ const formatTime = (isoString) => {
   return `${Math.floor(diff / 86400000)}天前`
 }
 
-const getScoreClass = (score) => {
-  if (score >= 90) return 'score-good'
-  if (score >= 70) return 'score-warn'
-  return 'score-bad'
+// 0-100 分制三档（与设计系统 v2 对齐）
+const spClass = (score) => {
+  if (score == null) return 'sp-na'
+  if (score >= 90) return 'sp-hi'
+  if (score >= 70) return 'sp-mid'
+  return 'sp-lo'
+}
+
+const scoreTextClass = (score) => {
+  if (score == null) return ''
+  if (score >= 90) return 't-hi'
+  if (score >= 70) return 't-mid'
+  return 't-lo'
 }
 
 const getProgressColor = (score) => {
-  if (score >= 90) return '#059669'
-  if (score >= 70) return '#d97706'
-  return '#dc2626'
+  if (score >= 90) return '#27945b'
+  if (score >= 70) return '#b07a12'
+  return '#e5484d'
 }
 
 const rectStatusTag = (s) => {
@@ -514,12 +501,13 @@ onUnmounted(() => { rectChart?.dispose() })
 <style scoped>
 .dashboard-page {
   min-height: 100vh;
-  background: #f5f7fa;
-  padding-bottom: 60px;
+  background: var(--bg);
+  padding-bottom: 66px;
   width: 100%;
   max-width: 100vw;
   box-sizing: border-box;
-  overflow-x: hidden;       /* 兜底：防止图表/长文本撑出横向滚动条；统计卡片由 minmax(0,1fr) 保证在屏内，不会被裁 */
+  overflow-x: hidden;
+  font-family: var(--sans);
 }
 
 .loading-center {
@@ -529,202 +517,232 @@ onUnmounted(() => { rectChart?.dispose() })
   height: 50vh;
 }
 
-/* 统计卡片（移动端独立命名，避免命中全局 design-upgrade.css 的 .stat-grid repeat(3,1fr)!important）*/
-.m-stat-grid {
-  display: grid;
-  /* 严格2列：minmax(0,1fr) 允许卡片收缩到内容以下，防止横向溢出；
-     配合 .stat-card 的 min-width:0 才能真正生效 */
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 10px;
-  padding: 12px;
+/* ===== 品牌头 ===== */
+.hero {
+  background: linear-gradient(150deg, #14a094 0%, #0c7168 78%);
+  padding: 18px 16px 20px;
+  color: #fff;
 }
 
-/* 不再让最后一张卡片占整行：保证每行严格只有2张卡片（第5张单独在最后一行左侧） */
-
-.stat-card {
-  background: #fff;
-  border-radius: 12px;
-  padding: 14px;
+.hero-row {
   display: flex;
   align-items: center;
-  gap: 12px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
-  min-width: 0;   /* 关键：grid子元素默认min-width:auto会撑大轨道，必须置0才能让卡片收缩到列宽内 */
+  justify-content: space-between;
 }
 
-.stat-icon {
-  width: 42px;
-  height: 42px;
-  border-radius: 10px;
+.hero-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.brand-mark {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22);
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
+  font-size: 17px;
 }
 
-.stat-body {
-  flex: 1;
-  min-width: 0;
+.brand-name {
+  font-size: 15.5px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
 }
 
-.stat-num {
-  font-size: 22px;
-  font-weight: 700;
-  color: #1a1d26;
-  line-height: 1.2;
-  min-width: 0;
-  overflow-wrap: break-word;
-}
-
-.stat-unit {
-  font-size: 13px;
-  font-weight: 400;
-  color: #9ba3af;
-}
-
-.stat-label {
-  font-size: 12px;
-  color: #9ba3af;
-  margin-top: 2px;
-}
-
-.stat-tags {
+.hero-acts {
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 4px;
+  align-items: center;
+  gap: 16px;
 }
 
-.stat-tag {
-  font-size: 10px;
-  padding: 1px 5px;
-  border-radius: 3px;
-  white-space: nowrap;
+.hero-greet {
+  margin-top: 18px;
 }
 
-.tag-warn { background: #FEF3C7; color: #92400E; }
-.tag-blue { background: #DBEAFE; color: #1E40AF; }
-.tag-green { background: #D1FAE5; color: #065F46; }
-.tag-red { background: #FEE2E2; color: #991B1B; }
-.tag-orange { background: #FFEDD5; color: #9A3412; }
-.tag-gray { background: #F1F5F9; color: #475569; }
+.greet-line {
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.2px;
+}
 
-/* 区块卡片 */
-.section-card {
-  background: #fff;
+.greet-sub {
+  margin-top: 5px;
+  font-size: 12.5px;
+  opacity: 0.85;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+}
+
+/* ===== KPI 2×2 ===== */
+.m-kpi-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  padding: 14px 14px 4px;
+}
+
+.m-kpi {
+  background: var(--bg-card);
+  border: 1px solid var(--ink-200);
   border-radius: 12px;
-  margin: 0 12px 12px;
-  padding: 16px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
-  overflow: hidden;         /* 图表/模块标签等内部内容不溢出卡片 */
-  min-width: 0;             /* 允许在flex/grid中收缩 */
+  padding: 13px 14px 11px;
+  min-width: 0;
 }
 
-.section-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: #1a1d26;
-  margin-bottom: 12px;
+.m-kpi .l { font-size: 11.5px; font-weight: 600; color: var(--ink-500); }
+.m-kpi .v {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--ink-900);
+  margin-top: 3px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.5px;
 }
+.m-kpi .v small { font-size: 13px; font-weight: 600; color: var(--ink-400); }
+.m-kpi .v.v-err { color: var(--err-strong); }
+.m-kpi .t { display: flex; gap: 5px; margin-top: 7px; flex-wrap: wrap; }
+
+/* ===== 卡片 ===== */
+.m-card {
+  background: var(--bg-card);
+  border: 1px solid var(--ink-200);
+  border-radius: 12px;
+  margin: 12px 14px 0;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.m-card-h {
+  padding: 13px 14px 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.m-card-t { font-size: 14.5px; font-weight: 700; color: var(--ink-900); }
+.m-card-d { font-size: 11.5px; color: var(--ink-400); }
 
 .section-empty {
   font-size: 13px;
-  color: #9ba3af;
+  color: var(--ink-400);
   text-align: center;
-  padding: 16px 0;
+  padding: 18px 0;
 }
 
-/* 得分行 */
-.score-row {
-  margin-bottom: 14px;
-}
-
-.score-row:last-child {
-  margin-bottom: 0;
-}
-
-.score-row-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 6px;
-  min-width: 0;             /* 允许score-name收缩并触发ellipsis */
-}
-
-.score-name {
-  font-size: 14px;
-  font-weight: 500;
-  color: #1a1d26;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.score-value {
-  font-size: 15px;
-  font-weight: 700;
-  font-family: "SF Mono", Consolas, monospace;
-}
-
-.score-good { color: #059669; }
-.score-warn { color: #d97706; }
-.score-bad { color: #dc2626; }
-
-/* 模块分布网格 */
-.module-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.module-chip {
+/* 项目得分单元格 */
+.proj-cell {
   display: flex;
   align-items: center;
-  gap: 6px;
-  background: #F8FAFC;
-  border: 1px solid #E2E8F0;
+  gap: 10px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--ink-100);
+}
+
+.proj-cell:last-child { border-bottom: none; }
+
+.proj-ico {
+  width: 30px;
+  height: 30px;
   border-radius: 8px;
-  padding: 6px 12px;
+  background: var(--blue-bg);
+  color: var(--brand-ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  flex-shrink: 0;
 }
 
-.module-chip-name {
-  font-size: 13px;
-  color: #334155;
-  max-width: 7em;
+.proj-gr { flex: 1; min-width: 0; }
+.proj-name { font-size: 14px; font-weight: 600; color: var(--ink-900); }
+.proj-sub { font-size: 11.5px; color: var(--ink-400); margin-top: 1px; }
+
+.sp-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 38px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.sp-pill.sp-hi { background: #edf6f0; color: var(--ok-strong); }
+.sp-pill.sp-mid { background: #faf5e9; color: var(--warn-strong); }
+.sp-pill.sp-lo { background: var(--err-bg); color: var(--err-strong); }
+.sp-pill.sp-na { background: transparent; color: var(--ink-300); border: 1px dashed var(--ink-200); }
+
+.proj-arrow { color: var(--ink-300); font-size: 14px; }
+
+/* 模块条形 */
+.bar-list { padding: 8px 14px 12px; }
+
+.bar-row {
+  display: grid;
+  grid-template-columns: 64px 1fr 26px;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+}
+
+.bar-lbl {
+  font-size: 12px;
+  color: var(--ink-700);
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
-.module-chip-count {
-  font-size: 14px;
-  font-weight: 700;
-  color: #2563eb;
+.bar-track {
+  display: block;
+  height: 14px;
+  border-radius: 4px;
+  background: var(--chart-bar-track);
+  overflow: hidden;
+}
+
+.bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.4s var(--ease);
+}
+
+.bar-val {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-700);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 /* 通知面板 */
 .notification-page {
   height: 100vh;
-  background: #f5f7fa;
+  background: var(--bg);
 }
 
-.notification-empty {
-  padding: 60px 0;
-}
+.notification-empty { padding: 60px 0; }
 
 .notification-item {
   display: flex;
   align-items: flex-start;
   gap: 12px;
   padding: 14px 16px;
-  background: white;
-  border-bottom: 1px solid #f1f5f9;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--ink-100);
 }
 
-.notification-item.unread {
-  background: #f8fbff;
-}
+.notification-item.unread { background: var(--blue-bg); }
 
 .notification-icon {
   width: 36px;
@@ -736,70 +754,49 @@ onUnmounted(() => { rectChart?.dispose() })
   flex-shrink: 0;
 }
 
-.notification-icon.icon-success { background: #ecfdf5; color: #059669; }
-.notification-icon.icon-danger { background: #fef2f2; color: #dc2626; }
-.notification-icon.icon-default { background: #f5f7fa; color: #64748b; }
+.notification-icon.icon-success { background: var(--ok-bg); color: var(--ok-strong); }
+.notification-icon.icon-danger { background: var(--err-bg); color: var(--err-strong); }
+.notification-icon.icon-default { background: var(--bg-muted); color: var(--ink-500); }
 
-.notification-body {
-  flex: 1;
-  min-width: 0;
-}
+.notification-body { flex: 1; min-width: 0; }
 
-.notification-title {
-  font-size: 15px;
-  font-weight: 500;
-  color: #1a1d26;
-  margin-bottom: 4px;
-}
-
+.notification-title { font-size: 15px; font-weight: 500; color: var(--ink-900); margin-bottom: 4px; }
 .notification-content {
   font-size: 13px;
-  color: #64748b;
+  color: var(--ink-600);
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+.notification-time { font-size: 12px; color: var(--ink-400); margin-top: 4px; }
 
-.notification-time {
-  font-size: 12px;
-  color: #9ba3af;
-  margin-top: 4px;
-}
-
-.clickable { cursor: pointer; transition: transform 0.1s; }
-.clickable:active { transform: scale(0.97); opacity: 0.85; }
-.stat-card.clickable { position: relative; }
-.stat-card.clickable::after {
-  content: ''; position: absolute; right: 10px; bottom: 10px;
-  width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent;
-  border-top: 5px solid #c0c4cc;
-}
-.module-chip.clickable { position: relative; }
+.clickable { cursor: pointer; transition: transform 0.1s, opacity 0.1s; }
+.clickable:active { transform: scale(0.98); opacity: 0.85; }
 
 /* Popup styles */
 .popup-scroll { padding: 12px 16px; max-height: 60vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
-.popup-title { font-size: 16px; font-weight: 600; text-align: center; margin-bottom: 12px; color: #1f2937; }
+.popup-title { font-size: 16px; font-weight: 600; text-align: center; margin-bottom: 12px; color: var(--ink-900); }
 .popup-loading { display: flex; justify-content: center; padding: 40px 0; }
-.popup-empty { text-align: center; color: #9ca3af; padding: 40px 0; font-size: 14px; }
-.popup-empty-sm { text-align: center; color: #9ca3af; padding: 12px 0; font-size: 13px; }
+.popup-empty { text-align: center; color: var(--ink-400); padding: 40px 0; font-size: 14px; }
+.popup-empty-sm { text-align: center; color: var(--ink-400); padding: 12px 0; font-size: 13px; }
 .coverage-section { margin-bottom: 12px; }
-.coverage-label { font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px; padding-left: 4px; }
+.coverage-label { font-size: 13px; font-weight: 600; color: var(--ink-700); margin-bottom: 6px; padding-left: 4px; }
 .module-score-row { margin-bottom: 12px; }
 .module-score-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
-.module-score-name { font-size: 13px; color: #374151; }
-.module-score-val { font-size: 14px; font-weight: 600; }
-.module-score-val.score-good { color: #059669; }
-.module-score-val.score-warn { color: #d97706; }
-.module-score-val.score-bad { color: #dc2626; }
+.module-score-name { font-size: 13px; color: var(--ink-700); }
+.module-score-val { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.module-score-val.t-hi { color: var(--ok-strong); }
+.module-score-val.t-mid { color: var(--warn-strong); }
+.module-score-val.t-lo { color: var(--err-strong); }
 
 /* Issue / Rectification items */
-.issue-item { padding: 10px 0; border-bottom: 1px solid #f1f5f9; }
+.issue-item { padding: 10px 0; border-bottom: 1px solid var(--ink-100); }
 .issue-item:last-child { border-bottom: none; }
 .issue-item-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
-.issue-item-title { font-size: 14px; font-weight: 500; color: #1f2937; flex: 1; margin-right: 8px; }
-.issue-item-check { font-size: 13px; color: #64748b; margin-bottom: 2px; }
-.issue-item-desc { font-size: 12px; color: #94a3b8; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.issue-item-title { font-size: 14px; font-weight: 500; color: var(--ink-900); flex: 1; margin-right: 8px; }
+.issue-item-check { font-size: 13px; color: var(--ink-600); margin-bottom: 2px; }
+.issue-item-desc { font-size: 12px; color: var(--ink-500); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 </style>
 
 <!-- 非 scoped 样式：修复 Vant position="right" 弹窗的 translateY(-50%) 导致全屏弹窗内容不可见 -->

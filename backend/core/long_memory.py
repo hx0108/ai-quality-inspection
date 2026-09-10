@@ -128,12 +128,11 @@ class LongMemory:
                 desc(ProjectMemory.occurrence_count),
             ).limit(limit).all()
 
-            # 更新访问统计
-            for m in memories:
-                m.access_count += 1
-                m.last_accessed = datetime.utcnow()
-            db.commit()
-
+            # 注意：此处不再更新 access_count/last_accessed。
+            # 原因：本函数常在评分流程（score_module_core）中被调用，外层 db session
+            # 持有未提交的读事务，此处另开会话写访问统计会触发 "database is locked"；
+            # 且 commit/rollback 会过期对象，导致下游访问已关闭会话的属性时报
+            # DetachedInstanceError。访问统计为非关键元数据，读路径不写，保证检索稳定。
             return memories
         finally:
             db.close()

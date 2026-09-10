@@ -78,7 +78,7 @@
       <!-- 失败记录提醒 -->
       <div class="failure-banner" v-if="failedRecordsCount > 0">
         <div class="failure-banner-left">
-          <el-icon color="#dc2626" :size="18"><WarningFilled /></el-icon>
+          <el-icon color="#c53a3f" :size="18"><WarningFilled /></el-icon>
           <span>近{{ trendDays }}天共有 <strong>{{ failedRecordsCount }}</strong> 次失败调用（失败率 {{ failedRate }}%）</span>
         </div>
         <el-button size="small" text type="danger" @click="showFailedOnly">
@@ -403,18 +403,18 @@ const failedRate = computed(() => {
 // 累计调用
 const totalCalls = computed(() => overview.value.total?.all_calls || 0)
 
-// 环比计算
+// 环比计算（后端可能返回字符串数字，统一 Number 化避免 NaN）
 const callsChange = computed(() => {
-  const cur = overview.value.month?.calls || 0
-  const prev = overview.value.last_month?.calls || 0
-  if (prev === 0) return cur > 0 ? null : 0
+  const cur = Number(overview.value.month?.calls) || 0
+  const prev = Number(overview.value.last_month?.calls) || 0
+  if (prev === 0) return null
   return Math.round((cur - prev) / prev * 1000) / 10
 })
 
 const tokensChange = computed(() => {
-  const cur = overview.value.month?.tokens || 0
-  const prev = overview.value.last_month?.tokens || 0
-  if (prev === 0) return cur > 0 ? null : 0
+  const cur = Number(overview.value.month?.tokens) || 0
+  const prev = Number(overview.value.last_month?.tokens) || 0
+  if (prev === 0) return null
   return Math.round((cur - prev) / prev * 1000) / 10
 })
 
@@ -541,9 +541,9 @@ const renderTrendChart = (trend) => {
       tooltip: {
         trigger: 'axis',
         backgroundColor: 'rgba(255, 255, 255, 0.96)',
-        borderColor: '#E2E8F0',
+        borderColor: '#e4e4e9',
         borderWidth: 1,
-        textStyle: { color: '#18181b', fontSize: 13 },
+        textStyle: { color: '#2c2c38', fontSize: 13 },
         extraCssText: 'box-shadow: 0 4px 12px rgba(0,0,0,0.08); border-radius: 8px;',
         formatter: (params) => {
           let html = `<div style="font-weight:600;margin-bottom:6px">${params[0].axisValue}</div>`
@@ -553,8 +553,8 @@ const renderTrendChart = (trend) => {
             else if (p.seriesName === '平均耗时') val = val + 'ms'
             else if (p.seriesName === 'Token消耗') val = formatTokens(val)
             html += `<div style="display:flex;align-items:center;gap:6px;margin:3px 0">
-              ${p.marker}<span style="color:#52525b">${p.seriesName}</span>
-              <span style="margin-left:auto;font-weight:600;color:#18181b">${val}</span>
+              ${p.marker}<span style="color:#474753">${p.seriesName}</span>
+              <span style="margin-left:auto;font-weight:600;color:#2c2c38">${val}</span>
             </div>`
           })
           return html
@@ -572,16 +572,16 @@ const renderTrendChart = (trend) => {
         itemGap: 16,
         itemWidth: 14,
         itemHeight: 10,
-        textStyle: { color: '#52525b', fontSize: 11 }
+        textStyle: { color: '#474753', fontSize: 11 }
       },
       grid: { left: 56, right: 56, top: 44, bottom: 32 },
       xAxis: {
         type: 'category',
         data: dates,
-        axisLine: { lineStyle: { color: '#E2E8F0' } },
+        axisLine: { lineStyle: { color: '#e4e4e9' } },
         axisTick: { show: false },
         axisLabel: {
-          color: '#94A3B8',
+          color: '#a4a4af',
           fontSize: 11,
           rotate: dates.length > 15 ? 35 : 0,
           formatter: (val) => val.slice(5)
@@ -593,8 +593,8 @@ const renderTrendChart = (trend) => {
           position: 'left',
           axisLine: { show: false },
           axisTick: { show: false },
-          splitLine: { lineStyle: { color: '#f4f4f5', type: 'dashed' } },
-          axisLabel: { color: '#94A3B8', fontSize: 11, splitNumber: 5 }
+          splitLine: { lineStyle: { color: '#ececf0', type: 'dashed' } },
+          axisLabel: { color: '#a4a4af', fontSize: 11, splitNumber: 5 }
         },
         {
           type: 'value',
@@ -603,7 +603,7 @@ const renderTrendChart = (trend) => {
           axisTick: { show: false },
           splitLine: { show: false },
           axisLabel: {
-            color: '#94A3B8',
+            color: '#a4a4af',
             fontSize: 11,
             splitNumber: 5,
             formatter: (val) => {
@@ -621,10 +621,7 @@ const renderTrendChart = (trend) => {
           data: calls,
           yAxisIndex: 0,
           itemStyle: {
-            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-              { offset: 0, color: '#52525b' },
-              { offset: 1, color: '#c4b5fd' }
-            ]),
+            color: '#0f8a80',
             borderRadius: [3, 3, 0, 0]
           },
           barMaxWidth: 20,
@@ -637,12 +634,12 @@ const renderTrendChart = (trend) => {
           smooth: true,
           symbol: 'circle',
           symbolSize: 5,
-          lineStyle: { color: '#16a34a', width: 2.5 },
-          itemStyle: { color: '#16a34a', borderWidth: 2, borderColor: '#fff' },
+          lineStyle: { color: '#35a398', width: 2.5 },
+          itemStyle: { color: '#35a398', borderWidth: 2, borderColor: '#fff' },
           areaStyle: {
             color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-              { offset: 0, color: 'rgba(16, 185, 129, 0.12)' },
-              { offset: 1, color: 'rgba(16, 185, 129, 0)' }
+              { offset: 0, color: 'rgba(53, 163, 152, 0.12)' },
+              { offset: 1, color: 'rgba(53, 163, 152, 0)' }
             ])
           }
         },
@@ -654,8 +651,8 @@ const renderTrendChart = (trend) => {
           smooth: true,
           symbol: 'diamond',
           symbolSize: 5,
-          lineStyle: { color: '#ca8a04', width: 1.5, type: [4, 3] },
-          itemStyle: { color: '#ca8a04' },
+          lineStyle: { color: '#b07a12', width: 1.5, type: [4, 3] },
+          itemStyle: { color: '#b07a12' },
           tooltip: { valueFormatter: (val) => val + '%' }
         },
         {
@@ -666,8 +663,8 @@ const renderTrendChart = (trend) => {
           smooth: true,
           symbol: 'emptyCircle',
           symbolSize: 4,
-          lineStyle: { color: '#ea580c', width: 1.5 },
-          itemStyle: { color: '#ea580c' },
+          lineStyle: { color: '#84848f', width: 1.5 },
+          itemStyle: { color: '#84848f' },
           tooltip: { valueFormatter: (val) => val + 'ms' }
         }
       ]
@@ -695,9 +692,9 @@ const renderDurationChart = async () => {
         tooltip: {
           trigger: 'axis',
           backgroundColor: 'rgba(255, 255, 255, 0.96)',
-          borderColor: '#E2E8F0',
+          borderColor: '#e4e4e9',
           borderWidth: 1,
-          textStyle: { color: '#18181b', fontSize: 13 },
+          textStyle: { color: '#2c2c38', fontSize: 13 },
           extraCssText: 'box-shadow: 0 4px 12px rgba(0,0,0,0.08); border-radius: 8px;',
         },
         grid: { left: 60, right: 20, top: 10, bottom: 25 },
@@ -706,23 +703,20 @@ const renderDurationChart = async () => {
           data: labels,
           axisLine: { show: false },
           axisTick: { show: false },
-          axisLabel: { color: '#94A3B8', fontSize: 11 }
+          axisLabel: { color: '#a4a4af', fontSize: 11 }
         },
         yAxis: {
           type: 'value',
           axisLine: { show: false },
           axisTick: { show: false },
-          splitLine: { lineStyle: { color: '#f4f4f5', type: 'dashed' } },
-          axisLabel: { color: '#94A3B8', fontSize: 11 }
+          splitLine: { lineStyle: { color: '#ececf0', type: 'dashed' } },
+          axisLabel: { color: '#a4a4af', fontSize: 11 }
         },
         series: [{
           type: 'bar',
           data: counts,
           itemStyle: {
-            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-              { offset: 0, color: '#52525b' },
-              { offset: 1, color: '#ea580c' }
-            ]),
+            color: '#35a398',
             borderRadius: [4, 4, 0, 0]
           },
           barWidth: 28,
@@ -744,7 +738,7 @@ const renderPieChart = () => {
       pieChart = echarts.init(pieChartRef.value)
     }
 
-    const colors = ['#52525b', '#2563eb', '#16a34a', '#ca8a04', '#dc2626', '#14b8a6']
+    const colors = ['#0f8a80', '#35a398', '#6fbcb2', '#0a6b62', '#a5d8d0', '#84848f']
     const data = models.map((m, i) => ({
       name: m.model_name_cn || m.model,
       value: (m.prompt_tokens || 0) + (m.completion_tokens || 0),
@@ -755,9 +749,9 @@ const renderPieChart = () => {
       tooltip: {
         trigger: 'item',
         backgroundColor: 'rgba(255, 255, 255, 0.96)',
-        borderColor: '#E2E8F0',
+        borderColor: '#e4e4e9',
         borderWidth: 1,
-        textStyle: { color: '#18181b', fontSize: 13 },
+        textStyle: { color: '#2c2c38', fontSize: 13 },
         formatter: (p) => `${p.name}<br/>Tokens: ${formatTokens(p.value)} (${p.percent}%)`
       },
       series: [{
@@ -767,7 +761,7 @@ const renderPieChart = () => {
         data,
         label: {
           fontSize: 11,
-          color: '#27272a',
+          color: '#2c2c38',
           formatter: '{b}\n{d}%'
         },
         labelLine: { length: 12, length2: 8 },
@@ -818,26 +812,6 @@ onUnmounted(() => {
 }
 
 /* ── Page header ── */
-.phdr {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  margin-bottom: 20px;
-}
-
-.phdr h1 {
-  font-size: 22px;
-  font-weight: 800;
-  color: var(--ink-900);
-  letter-spacing: -0.4px;
-  margin: 0;
-}
-
-.phdr-sub {
-  font-size: 13px;
-  color: var(--ink-400);
-  margin-top: 3px;
-}
 
 /* ── Filters ── */
 .filters {
@@ -857,65 +831,6 @@ onUnmounted(() => {
 }
 
 /* ── KPI row ── */
-.kpi-row {
-  display: grid;
-  gap: 12px;
-  margin-bottom: 20px;
-}
-
-.kpi-row.cols-5 {
-  grid-template-columns: repeat(5, 1fr);
-}
-
-.kpi {
-  background: var(--bg-card);
-  border: 1px solid var(--ink-100);
-  border-radius: var(--r-lg);
-  padding: 18px 20px;
-  cursor: default;
-  transition: all 0.15s var(--ease);
-  animation: kpiIn 0.3s var(--ease) both;
-}
-
-.kpi:nth-child(2) { animation-delay: 30ms; }
-.kpi:nth-child(3) { animation-delay: 60ms; }
-.kpi:nth-child(4) { animation-delay: 90ms; }
-.kpi:nth-child(5) { animation-delay: 120ms; }
-
-.kpi:hover {
-  border-color: var(--ink-200);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-}
-
-.kpi-lbl {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink-400);
-  margin-bottom: 6px;
-}
-
-.kpi-num {
-  font-family: var(--mono);
-  font-size: 32px;
-  font-weight: 700;
-  color: var(--ink-900);
-  line-height: 1;
-  margin-bottom: 6px;
-  letter-spacing: -1.5px;
-}
-
-.kpi-unit {
-  font-size: 16px;
-  font-weight: 500;
-  color: var(--ink-400);
-  letter-spacing: 0;
-}
-
-.kpi-tags {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
 
 .kt {
   font-size: 11px;
@@ -1068,7 +983,7 @@ onUnmounted(() => {
 }
 
 .type-scoring { background: var(--blue-bg); color: var(--blue); }
-.type-analysis { background: #f5f3ff; color: var(--ink-600); }
+.type-analysis { background: var(--bg-muted); color: var(--ink-600); }
 .type-report { background: var(--ok-bg); color: var(--ok); }
 .type-rectification_check { background: var(--orange-light); color: var(--orange); }
 
@@ -1144,11 +1059,9 @@ onUnmounted(() => {
 
 /* ── Responsive ── */
 @media (max-width: 1200px) {
-  .kpi-row.cols-5 { grid-template-columns: repeat(3, 1fr); }
   .charts, .grid-2 { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 900px) {
-  .kpi-row.cols-5 { grid-template-columns: repeat(2, 1fr); }
 }
 </style>

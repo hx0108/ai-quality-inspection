@@ -3,22 +3,20 @@
     <van-nav-bar title="AI 智能评分" left-arrow @click-left="onBack" />
 
     <div class="scoring-content">
-      <!-- 总分卡片 -->
+      <!-- 总分卡片（原型：居中大分数） -->
       <div class="total-score-card">
-        <div class="total-score-bg"></div>
-        <div class="total-score-body">
-          <div class="total-score-label">
-            项目总分
-            <span class="scored-count">{{ scoredCount }}/{{ totalModuleCount }} 模块已评分</span>
-          </div>
-          <div class="total-score-number" :class="getScoreClass(totalScore)">
-            {{ totalScore.toFixed(2) }}
-          </div>
-          <div class="total-score-unit">分</div>
+        <div class="ts-label">项目总分</div>
+        <div class="ts-num" :class="getScoreClass(totalScore)">
+          {{ totalScore.toFixed(1) }}<small> / 100</small>
+        </div>
+        <div class="ts-tags">
+          <span class="ktag ktag-brand">{{ scoredCount }}/{{ totalModuleCount }} 模块已评分</span>
+          <span v-if="totalScore >= 90" class="ktag ktag-ok">表现优秀</span>
+          <span v-else-if="totalScore < 70" class="ktag ktag-err">需重点关注</span>
         </div>
       </div>
 
-      <!-- 8个模块状态列表 -->
+      <!-- 8个模块状态列表（原型：名称 + 条形 + 分数胶囊） -->
       <div class="module-status-list">
         <div v-for="mod in moduleList" :key="mod.module_name"
           class="module-status-card"
@@ -26,24 +24,17 @@
           @click="onModuleClick(mod)"
         >
           <div class="module-status-row">
-            <div class="module-info">
-              <span class="module-name">{{ mod.module_name }}</span>
-              <van-tag size="small" :type="getModuleTagType(mod.scoring_status)">
-                {{ getModuleStatusText(mod.scoring_status) }}
-              </van-tag>
-            </div>
-            <div class="module-score-area">
-              <span v-if="mod.pct_score !== null" class="module-score" :class="getScoreClass(mod.pct_score)">
-                {{ mod.pct_score.toFixed(2) }}
-              </span>
-              <van-loading v-else-if="mod.scoring_status === 'scoring'" size="18" color="#2563eb" />
-              <span v-else class="module-score-pending">—</span>
-            </div>
+            <div class="module-name">{{ mod.module_name }}</div>
+            <span class="m-track">
+              <span class="m-fill" :style="{ width: (mod.pct_score || 0) + '%', background: getBarColor(mod.pct_score) }" />
+            </span>
+            <span v-if="mod.pct_score !== null" class="sp-pill" :class="getScoreClass(mod.pct_score)">
+              {{ mod.pct_score.toFixed(1) }}
+            </span>
+            <van-loading v-else-if="mod.scoring_status === 'scoring'" size="16" color="var(--blue)" />
+            <span v-else class="sp-pill sp-na">–</span>
           </div>
-          <div v-if="mod.scoring_status === 'scoring'" class="module-progress">
-            <van-progress :percentage="100" :stroke-width="4" color="#2563eb" :show-pivot="false" />
-            <span class="scoring-hint">AI 评分中...</span>
-          </div>
+          <div v-if="mod.scoring_status === 'scoring'" class="scoring-hint">AI 评分中...</div>
           <div v-if="mod.scoring_status === 'failed'" class="module-error">
             评分失败，可点击重新评分
           </div>
@@ -65,8 +56,7 @@
               </div>
               <div class="detail-item-score" @click.stop="openEditScore(item)">
                 <span :class="getItemScoreClass(item.score)">{{ Number(item.score).toFixed(2) }}</span>
-                <span class="detail-item-unit">/ 5</span>
-                <van-icon v-if="item.is_edited" name="edit" size="12" color="#2563eb" />
+                <van-icon v-if="item.is_edited" name="edit" size="12" color="var(--blue)" />
               </div>
             </div>
             <div v-if="item.is_skipped" class="detail-item-skipped">已跳过</div>
@@ -134,8 +124,8 @@
       >
         <div class="edit-form">
           <div class="edit-item-name">{{ editingItem?.item_name }}</div>
-          <van-field v-model="editForm.score" type="number" label="分数" placeholder="0-5"
-            :rules="[{ validator: val => val >= 0 && val <= 5, message: '分数必须在0-5之间' }]" />
+          <van-field v-model="editForm.score" type="number" label="分数" :placeholder="scorePlaceholder"
+            :rules="[{ validator: scoreValidator, message: scoreValidatorMsg }]" />
           <van-field v-model="editForm.scoring_basis" rows="3" autosize type="textarea" label="评分依据" />
           <van-field label="修改原因">
             <template #input>
@@ -190,6 +180,9 @@ const showDetail = ref(false)
 const detailModuleName = ref('')
 const detailItems = ref([])
 const detailModuleScore = ref(0)
+const detailModuleMax = ref(5)      // 当前模块单项分数上限（砺质=模块max_score，蝶城=5）
+const detailModuleRole = ref('score') // score / deduction（砺质扣分模块允许负分）
+const standardType = ref('diecheng')
 
 // 编辑弹窗
 const showEditScore = ref(false)
@@ -211,6 +204,8 @@ const onModuleClick = async (mod) => {
   if (mod.scoring_status === 'completed') {
     detailModuleName.value = mod.module_name
     detailModuleScore.value = mod.pct_score || 0
+    detailModuleMax.value = mod.max_score || 5
+    detailModuleRole.value = mod.role || 'score'
     // 从缓存取，或按需加载模块详情（含照片）
     if (resultsCache.value[mod.module_name] && resultsCache.value[mod.module_name].length > 0) {
       detailItems.value = resultsCache.value[mod.module_name]
@@ -261,11 +256,32 @@ const openEditScore = (item) => {
   showEditScore.value = true
 }
 
+// 改分校验：砺质按单项max_score，扣分模块允许0或负分；其它标准保持0-5
+const isLizhi = computed(() => standardType.value === 'lizhi')
+const itemMaxScore = computed(() => Number(editingItem.value?.max_score ?? detailModuleMax.value ?? 0))
+const scorePlaceholder = computed(() => {
+  if (!isLizhi.value) return '0-5'
+  return detailModuleRole.value === 'deduction' ? '输入0或负分' : `0-${itemMaxScore.value}`
+})
+const scoreValidatorMsg = computed(() => {
+  if (!isLizhi.value) return '分数必须在0-5之间'
+  return detailModuleRole.value === 'deduction'
+    ? '扣分项分数必须小于或等于0'
+    : `分数必须在0-${itemMaxScore.value}之间`
+})
+const scoreValidator = (val) => {
+  const n = typeof val === 'number' ? val : parseFloat(val)
+  if (!Number.isFinite(n)) return false
+  if (!isLizhi.value) return n >= 0 && n <= 5
+  if (detailModuleRole.value === 'deduction') return n <= 0
+  return n >= 0 && n <= itemMaxScore.value
+}
+
 const onSaveScore = async (action) => {
   if (action === 'cancel') return true
   const score = parseFloat(editForm.value.score)
-  if (isNaN(score) || score < 0 || score > 5) {
-    showToast('分数必须在0-5之间')
+  if (isNaN(score) || !scoreValidator(score)) {
+    showToast(scoreValidatorMsg.value)
     return false
   }
   try {
@@ -320,6 +336,7 @@ const generateReport = async () => {
 const fetchModuleStatus = async () => {
   try {
     const res = await getModuleScoringStatus(taskId)
+    standardType.value = res.standard_type || 'diecheng'
     moduleList.value = res.modules || []
     totalScore.value = res.current_total_score || 0
     scoredCount.value = res.scored_module_count || 0
@@ -354,16 +371,6 @@ const startPolling = () => {
   schedulePoll(doPoll, 1000)
 }
 
-const getModuleTagType = (status) => {
-  const map = { completed: 'success', scoring: 'primary', failed: 'danger', pending: 'default' }
-  return map[status] || 'default'
-}
-
-const getModuleStatusText = (status) => {
-  const map = { completed: '已评分', scoring: '评分中', failed: '评分失败', pending: '待评分' }
-  return map[status] || status
-}
-
 const getItemScoreClass = (score) => {
   if (Number(score) >= 5) return 'item-score-full'
   if (Number(score) >= 3) return 'item-score-warn'
@@ -371,10 +378,17 @@ const getItemScoreClass = (score) => {
 }
 
 const getScoreClass = (score) => {
-  if (score >= 90) return 'score-excellent'
-  if (score >= 80) return 'score-good'
-  if (score >= 60) return 'score-normal'
-  return 'score-poor'
+  if (score >= 90) return 'sp-hi'
+  if (score >= 70) return 'sp-mid'
+  return 'sp-lo'
+}
+
+// 模块条形颜色（三档语义）
+const getBarColor = (score) => {
+  if (score == null) return 'var(--ink-300)'
+  if (score >= 90) return 'var(--chart-1)'
+  if (score >= 70) return 'var(--warn)'
+  return 'var(--err)'
 }
 
 const onBack = () => router.back()
@@ -404,52 +418,51 @@ onUnmounted(() => {
 }
 
 /* 总分卡片 */
+/* ===== 总分卡（原型：居中大分数 + ktag 行） ===== */
 .total-score-card {
-  position: relative;
+  background: var(--bg-card);
+  border: 1px solid var(--ink-200);
   border-radius: 12px;
-  overflow: hidden;
-  margin-bottom: 16px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-}
-
-.total-score-bg {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(135deg, #2563eb, #1d4ed8);
-}
-
-.total-score-body {
-  position: relative;
-  padding: 20px 24px;
+  padding: 18px 16px 14px;
+  margin-bottom: 14px;
   text-align: center;
-  color: #fff;
 }
 
-.total-score-label {
-  font-size: 13px;
-  opacity: 0.6;
-  margin-bottom: 6px;
+.ts-label {
+  font-size: 12.5px;
+  color: var(--ink-500);
 }
 
-.scored-count {
-  font-size: 11px;
-  opacity: 0.5;
-  margin-left: 8px;
+.ts-num {
+  font-size: 52px;
+  font-weight: 800;
+  letter-spacing: -2px;
+  line-height: 1.15;
+  color: var(--ink-900);
+  font-variant-numeric: tabular-nums;
+  margin-top: 4px;
 }
 
-.total-score-number {
-  font-size: 42px;
-  font-weight: 700;
-  line-height: 1.2;
+.ts-num small {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--ink-400);
+  letter-spacing: 0;
 }
 
-.total-score-unit {
-  font-size: 14px;
-  opacity: 0.5;
-  margin-top: 2px;
+.ts-num.sp-hi { color: var(--ok-strong); }
+.ts-num.sp-mid { color: var(--warn-strong); }
+.ts-num.sp-lo { color: var(--err-strong); }
+
+.ts-tags {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: wrap;
 }
 
-/* 模块列表 */
+/* 模块列表（原型：名称 + 条形 + 分数胶囊） */
 .module-status-list {
   display: flex;
   flex-direction: column;
@@ -457,50 +470,79 @@ onUnmounted(() => {
 }
 
 .module-status-card {
-  background: #fff;
-  border-radius: 10px;
-  padding: 14px 16px;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.04);
-  transition: transform 0.15s, box-shadow 0.15s;
+  background: var(--bg-card);
+  border: 1px solid var(--ink-200);
+  border-radius: 12px;
+  padding: 12px 14px;
+  transition: transform 0.15s;
   cursor: pointer;
 }
 
 .module-status-card:active {
   transform: scale(0.98);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
 }
 
 .module-status-row {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-}
-
-.module-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
 .module-name {
-  font-size: 14px;
+  font-size: 12.5px;
   font-weight: 600;
-  color: #1a1d26;
+  color: var(--ink-700);
+  width: 92px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.module-score-area {
-  display: flex;
-  align-items: center;
+.m-track {
+  flex: 1;
+  display: block;
+  height: 7px;
+  border-radius: 4px;
+  background: var(--chart-bar-track);
+  overflow: hidden;
 }
 
-.module-score {
-  font-size: 18px;
-  font-weight: 700;
+.m-fill {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.4s var(--ease);
 }
 
 .module-score-pending {
-  color: #9ba3af;
-  font-size: 16px;
+  color: var(--ink-400);
+  font-size: 15px;
+}
+
+/* 分数胶囊（三档） */
+.sp-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.sp-pill.sp-hi { background: #edf6f0; color: var(--ok-strong); }
+.sp-pill.sp-mid { background: #faf5e9; color: var(--warn-strong); }
+.sp-pill.sp-lo { background: var(--err-bg); color: var(--err-strong); }
+.sp-pill.sp-na { background: transparent; color: var(--ink-300); border: 1px dashed var(--ink-200); }
+
+.scoring-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--brand-ink);
 }
 
 .module-progress {
@@ -511,20 +553,20 @@ onUnmounted(() => {
   display: block;
   text-align: center;
   font-size: 12px;
-  color: #2563eb;
+  color: var(--blue);
   margin-top: 4px;
 }
 
 .module-error {
   font-size: 12px;
-  color: #dc2626;
+  color: var(--err);
   margin-top: 6px;
 }
 
 /* 状态色条 */
-.module-completed { border-left: 3px solid #059669; }
-.module-scoring { border-left: 3px solid #2563eb; }
-.module-failed { border-left: 3px solid #dc2626; }
+.module-completed { border-left: 3px solid var(--ok-strong); }
+.module-scoring { border-left: 3px solid var(--blue); }
+.module-failed { border-left: 3px solid var(--err); }
 .module-pending { border-left: 3px solid #9ba3af; }
 
 /* 明细弹窗 */
@@ -545,7 +587,7 @@ onUnmounted(() => {
   border-radius: 8px;
   padding: 12px;
   margin-bottom: 8px;
-  border-left: 3px solid #2563eb;
+  border-left: 3px solid var(--blue);
 }
 
 .detail-item-header {
@@ -619,7 +661,7 @@ onUnmounted(() => {
   border-radius: 6px;
   padding: 8px;
   margin-bottom: 6px;
-  border-left: 2px solid #d97706;
+  border-left: 2px solid var(--orange);
 }
 
 .issue-desc {
@@ -662,7 +704,7 @@ onUnmounted(() => {
   height: 60px;
   border-radius: 4px;
   background: #fef2f2;
-  color: #dc2626;
+  color: var(--err);
   font-size: 11px;
   display: flex;
   align-items: center;
@@ -686,14 +728,14 @@ onUnmounted(() => {
 }
 
 /* 分数颜色 */
-.score-excellent { color: #059669; font-weight: bold; }
-.score-good { color: #2563eb; font-weight: bold; }
-.score-normal { color: #d97706; font-weight: bold; }
-.score-poor { color: #dc2626; font-weight: bold; }
+.score-excellent { color: var(--ok-strong); font-weight: bold; }
+.score-good { color: var(--blue); font-weight: bold; }
+.score-normal { color: var(--orange); font-weight: bold; }
+.score-poor { color: var(--err); font-weight: bold; }
 
-.item-score-full { color: #059669; font-weight: bold; }
-.item-score-warn { color: #d97706; font-weight: bold; }
-.item-score-low { color: #dc2626; font-weight: bold; }
+.item-score-full { color: var(--ok-strong); font-weight: bold; }
+.item-score-warn { color: var(--orange); font-weight: bold; }
+.item-score-low { color: var(--err); font-weight: bold; }
 
 /* 底部操作栏 */
 .action-bar {
@@ -707,7 +749,7 @@ onUnmounted(() => {
 }
 
 .export-btn {
-  background: #2563eb;
+  background: var(--blue);
   border-color: transparent;
 }
 </style>

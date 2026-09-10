@@ -54,6 +54,7 @@ def fan_out_analyze(state: dict) -> list[Send]:
             "module_pct_score": module["module_pct_score"],
             "items_summary": items_summary,
             "modules_done": modules_done,
+            "standard_type": state.get("standard_type", "diecheng"),
         }))
 
     logger.info(f"fan-out: {len(sends)} 个模块待分析")

@@ -75,9 +75,11 @@ async def score_module_core(
         logger.warning(f"无模板数据: {module_name}")
         return {"results": [], "module_name": module_name, "count": 0, "errors": [f"无模板数据: {module_name}"]}
 
-    # 4. 分离合格项和有问题项
+    # 4. 分离合格项 / 有问题项 / 扣分项
+    is_lizhi = (standard_type == "lizhi")
     qualified_items = []
     problem_items = []
+    deduction_items = []  # 砺质扣分项（其他场所5S，旧标准为BI及5S）：确定性计分，不走AI
 
     for item in template_items:
         item_id = item.get("item_id")
@@ -89,25 +91,44 @@ async def score_module_core(
             "check_method": item.get("check_method", ""),
             "scoring_rule": item.get("scoring_rule", "完全符合5分"),
             "weight": item.get("weight", 0.01),
+            "max_score": item.get("max_score", 5),
+            "is_deduction": item.get("is_deduction", False),
             "issues": item_issues,
             "is_skipped": False
         }
 
-        if not item_issues:
+        if is_lizhi and entry["is_deduction"]:
+            deduction_items.append(entry)
+        elif not item_issues:
             qualified_items.append(entry)
         else:
             problem_items.append(entry)
 
-    logger.info(f"{module_name}: 合格{len(qualified_items)}项, 有问题{len(problem_items)}项")
+    logger.info(f"{module_name}: 合格{len(qualified_items)}项, 有问题{len(problem_items)}项, 扣分{len(deduction_items)}项")
 
-    # 5. 合格项直接满分
+    # 5. 合格项直接满分（砺质=该项max_score；蝶城/非蝶城=5）
     results = []
     for item in qualified_items:
+        full = item["max_score"] if is_lizhi else 5
+        basis = f"检查合格，无问题发现，给予满分{full}分" if is_lizhi else "检查合格，无问题发现，给予满分5分"
         results.append({
             "item_id": item["item_id"],
             "item_name": item["item_name"],
-            "score": 5,
-            "scoring_basis": "检查合格，无问题发现，给予满分5分",
+            "score": full,
+            "scoring_basis": basis,
+            "improvement_suggestion": ""
+        })
+
+    # 5b. 扣分项（砺质扣分模块）：确定性规则 score = -(问题数 × 单位扣分)
+    for item in deduction_items:
+        issue_count = len(item["issues"])
+        per = item["max_score"] or 3
+        score = -(issue_count * per)
+        results.append({
+            "item_id": item["item_id"],
+            "item_name": item["item_name"],
+            "score": score,
+            "scoring_basis": f"发现{issue_count}处不合格，每处扣{per}分，共扣{issue_count * per}分",
             "improvement_suggestion": ""
         })
 
@@ -119,14 +140,17 @@ async def score_module_core(
         memory_context = _build_memory_context(task_id, project_id, module_name, problem_items)
 
         logger.info(f"AI评分: {module_name} ({len(problem_items)}项)")
-        ai_results = await llm.score_module(module_name, problem_items, memory_context=memory_context)
+        ai_results = await llm.score_module(module_name, problem_items, memory_context=memory_context, standard_type=standard_type)
         logger.info(f"AI返回: {module_name} ({len(ai_results)}项)")
         results.extend(ai_results)
     elif problem_items:
         # 无API Key，使用简单规则评分
         for item in problem_items:
             issue_count = len(item["issues"])
-            score = max(0, 5 - issue_count)
+            if is_lizhi:
+                score = max(0, item["max_score"] - issue_count)
+            else:
+                score = max(0, 5 - issue_count)
             results.append({
                 "item_id": item["item_id"],
                 "item_name": item["item_name"],
@@ -136,7 +160,7 @@ async def score_module_core(
             })
 
     # 7. 合并所有检查项
-    all_items = qualified_items + problem_items
+    all_items = qualified_items + problem_items + deduction_items
 
     # 8. 保存评分结果到DB
     batch_size = 20
@@ -161,6 +185,12 @@ async def score_module_core(
         confidence_score = item_result.get("confidence_score", _calculate_confidence(item_result, original_item))
         needs_review = confidence_score < CONFIDENCE_THRESHOLD if confidence_score else False
 
+        # 砺质：weighted_score 直接等于原始分值（无权重概念）；其它标准维持 score×weight
+        if is_lizhi:
+            weighted_score = score
+        else:
+            weighted_score = score * weight
+
         result = ScoringResult(
             scoring_id=scoring_id,
             record_id=record_id,
@@ -169,7 +199,7 @@ async def score_module_core(
             item_name=item_name,
             score=score,
             weight=weight,
-            weighted_score=score * weight,
+            weighted_score=weighted_score,
             scoring_basis=item_result.get("scoring_basis", ""),
             improvement_suggestion=item_result.get("improvement_suggestion", ""),
             check_standard=check_standard,
@@ -224,9 +254,22 @@ def save_default_scores(
         if not template_items:
             return
 
+        is_lizhi = (standard_type == "lizhi")
         for item in template_items:
-            score = 3.0 if item["item_id"] in issue_item_ids else 5.0
+            max_score = item.get("max_score", 5)
+            is_deduction = item.get("is_deduction", False)
+            if is_lizhi:
+                if is_deduction:
+                    # 扣分项降级：默认不扣（0），由人工复核
+                    score = 0
+                elif item["item_id"] in issue_item_ids:
+                    score = round(max_score * 0.6, 1)  # 有问题给60%分
+                else:
+                    score = max_score  # 合格满分
+            else:
+                score = 3.0 if item["item_id"] in issue_item_ids else 5.0
             weight = item.get("weight", 0.01)
+            weighted_score = score if is_lizhi else score * weight
             scoring_id = f"SCR-{_uuid.uuid4().hex[:12]}"
             result = ScoringResult(
                 scoring_id=scoring_id,
@@ -236,7 +279,7 @@ def save_default_scores(
                 item_name=item.get("item_name", ""),
                 score=score,
                 weight=weight,
-                weighted_score=score * weight,
+                weighted_score=weighted_score,
                 scoring_basis=reason,
                 improvement_suggestion="",
                 is_skipped=False,
@@ -316,42 +359,49 @@ def _build_memory_context(
         problem_items: 有问题的检查项列表（用于查找历史参考）
 
     Returns:
-        格式化的记忆上下文
+        格式化的记忆上下文；任何异常都返回空串，绝不阻断评分。
+        （记忆上下文是增强项，DB 锁或检索失败时降级为无记忆评分）
     """
     from core.scoring_memory import build_scoring_context
 
     parts = []
+    try:
+        # 1. 获取短记忆上下文
+        short_memory_text = ShortMemory.build_memory_prompt(task_id, module_name)
+        if short_memory_text:
+            parts.append(short_memory_text)
 
-    # 1. 获取短记忆上下文
-    short_memory_text = ShortMemory.build_memory_prompt(task_id, module_name)
-    if short_memory_text:
-        parts.append(short_memory_text)
+        # 2. 获取长记忆上下文
+        if project_id:
+            long_memory_text = get_memory_context_for_scoring(project_id, module_name)
+            if long_memory_text:
+                parts.append(long_memory_text)
 
-    # 2. 获取长记忆上下文
-    if project_id:
-        long_memory_text = get_memory_context_for_scoring(project_id, module_name)
-        if long_memory_text:
-            parts.append(long_memory_text)
+        # 3. 获取历史评分参考（对每个problem_item查找相似历史案例）
+        if project_id and problem_items:
+            scoring_refs = []
+            for item in problem_items[:10]:  # 最多处理10个问题项
+                item_id = item.get("item_id", "")
+                item_name = item.get("item_name", "")
+                if item_id and item_name:
+                    context = build_scoring_context(
+                        project_id=project_id,
+                        module_name=module_name,
+                        item_id=item_id,
+                        item_name=item_name,
+                        limit=3  # 每项参考3条
+                    )
+                    if context:
+                        scoring_refs.append(f"【{item_id}】{context}")
 
-    # 3. 获取历史评分参考（对每个problem_item查找相似历史案例）
-    if project_id and problem_items:
-        scoring_refs = []
-        for item in problem_items[:10]:  # 最多处理10个问题项
-            item_id = item.get("item_id", "")
-            item_name = item.get("item_name", "")
-            if item_id and item_name:
-                context = build_scoring_context(
-                    project_id=project_id,
-                    module_name=module_name,
-                    item_id=item_id,
-                    item_name=item_name,
-                    limit=3  # 每项参考3条
-                )
-                if context:
-                    scoring_refs.append(f"【{item_id}】{context}")
-
-        if scoring_refs:
-            parts.append("\n".join(scoring_refs))
+            if scoring_refs:
+                parts.append("\n".join(scoring_refs))
+    except Exception as e:
+        # 记忆上下文检索/写入失败（常见：SQLite "database is locked"，
+        # 因当前 db session 持有读事务、记忆子系统另开会话写 project_memories 访问统计）
+        # 绝不让增强项阻断评分——降级为无记忆评分。
+        logger.warning(f"构建记忆上下文失败，降级为无记忆评分: {module_name} - {e}")
+        return ""
 
     return "\n".join(parts) if parts else ""
 

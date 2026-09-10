@@ -8,7 +8,7 @@
 
     <!-- 项目筛选 -->
     <div class="filter-bar">
-      <van-dropdown-menu active-color="#2563eb">
+      <van-dropdown-menu active-color="var(--blue)">
         <van-dropdown-item v-model="projectFilter" :options="projectOptions" @change="filterReports" />
       </van-dropdown-menu>
     </div>
@@ -26,39 +26,30 @@
           </template>
         </van-empty>
 
-        <van-cell-group v-else inset class="report-group">
-          <van-cell
+        <div v-else class="report-cards">
+          <div
             v-for="report in filteredReports"
             :key="report.report_id"
-            is-link
+            class="rp-card"
             @click="goToReport(report)"
           >
-            <template #title>
-              <div class="report-title">{{ report.project_name || '未知项目' }}</div>
-            </template>
-            <template #label>
-              <div class="report-meta">
-                <span>{{ report.report_id }}</span>
-                <span>{{ formatDate(report.generated_at) }}</span>
-              </div>
-            </template>
-            <template #value>
-              <span :class="getScoreClass(report.total_score)">
-                {{ report.total_score?.toFixed(2) }}
+            <div class="rp-top">
+              <span class="rp-title">{{ report.project_name || '未知项目' }} · 品质检查报告</span>
+              <span class="sp-pill" :class="getScoreClass(report.total_score)">
+                {{ report.total_score?.toFixed(1) }}
               </span>
-            </template>
-          </van-cell>
-        </van-cell-group>
+            </div>
+            <div class="rp-meta">
+              <span class="rp-id">{{ report.report_id }}</span>
+              <span>{{ formatDate(report.generated_at) }}</span>
+              <span class="rp-link">查看报告</span>
+            </div>
+          </div>
+        </div>
       </van-list>
     </van-pull-refresh>
 
-    <van-tabbar v-model="activeTab" route>
-      <van-tabbar-item icon="chart-trending-o" to="/dashboard">概览</van-tabbar-item>
-      <van-tabbar-item icon="home-o" to="/tasks">任务</van-tabbar-item>
-      <van-tabbar-item icon="todo-list-o" to="/reports">报告</van-tabbar-item>
-      <van-tabbar-item icon="shield-o" to="/rectification">整改</van-tabbar-item>
-      <van-tabbar-item icon="bar-chart-o" to="/analysis-mobile">分析</van-tabbar-item>
-    </van-tabbar>
+    <MobileTabbar />
 
     <MobileUserSheet v-model:show="showUser" />
   </div>
@@ -68,6 +59,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import MobileUserSheet from '../../components/MobileUserSheet.vue'
+import MobileTabbar from '../../components/MobileTabbar.vue'
 import { getReportList } from '../../api/report'
 
 const router = useRouter()
@@ -76,7 +68,6 @@ const reports = ref([])
 const loading = ref(false)
 const finished = ref(false)  // 初始为 false，让 onLoad 可以执行
 const refreshing = ref(false)
-const activeTab = ref(2)
 const showUser = ref(false)
 const page = ref(1)
 const projectFilter = ref('')
@@ -140,11 +131,10 @@ const formatDate = (isoStr) => {
 }
 
 const getScoreClass = (score) => {
-  if (!score) return ''
-  if (score >= 90) return 'score-excellent'
-  if (score >= 80) return 'score-good'
-  if (score >= 60) return 'score-normal'
-  return 'score-poor'
+  if (!score) return 'sp-na'
+  if (score >= 90) return 'sp-hi'
+  if (score >= 70) return 'sp-mid'
+  return 'sp-lo'
 }
 
 onMounted(() => {
@@ -200,27 +190,92 @@ onMounted(() => {
 }
 
 .score-excellent {
-  color: #059669;
+  color: var(--ok-strong);
   font-weight: bold;
   font-size: 18px;
 }
 
 .score-good {
-  color: #2563eb;
+  color: var(--blue);
   font-weight: bold;
   font-size: 18px;
 }
 
 .score-normal {
-  color: #d97706;
+  color: var(--orange);
   font-weight: bold;
   font-size: 18px;
 }
 
 .score-poor {
-  color: #dc2626;
+  color: var(--err);
   font-weight: bold;
   font-size: 18px;
 }
 
+/* ===== 报告卡（原型形态） ===== */
+.report-cards { padding: 10px 14px; }
+
+.rp-card {
+  background: var(--bg-card);
+  border: 1px solid var(--ink-200);
+  border-radius: 12px;
+  padding: 13px 14px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  transition: transform 0.12s;
+}
+.rp-card:active { transform: scale(0.98); }
+
+.rp-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.rp-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink-900);
+  line-height: 1.45;
+  min-width: 0;
+}
+
+.rp-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--ink-500);
+  font-variant-numeric: tabular-nums;
+}
+
+.rp-id { font-family: var(--mono); font-size: 11px; color: var(--ink-400); }
+
+.rp-link {
+  margin-left: auto;
+  color: var(--blue);
+  font-weight: 600;
+}
+
+/* 分数胶囊（三档） */
+.sp-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.sp-pill.sp-hi { background: #edf6f0; color: var(--ok-strong); }
+.sp-pill.sp-mid { background: #faf5e9; color: var(--warn-strong); }
+.sp-pill.sp-lo { background: var(--err-bg); color: var(--err-strong); }
+.sp-pill.sp-na { background: transparent; color: var(--ink-300); border: 1px dashed var(--ink-200); }
 </style>

@@ -7,6 +7,15 @@
         <div class="phdr-sub">物业品质检查任务创建、分配与跟踪</div>
       </div>
       <div class="phdr-acts">
+        <button class="btn" :disabled="total === 0" @click="openBatchExport">
+          <svg viewBox="0 0 16 16"><path d="M8 2v8M5 7l3 3 3-3M3 12v2h10v-2"/></svg>导出
+        </button>
+        <button v-if="authStore.isAdmin" class="btn" @click="openBatchCreate">
+          <svg viewBox="0 0 16 16"><path d="M5 3v10M11 3v10M2 6h4M10 6h4"/></svg>批量创建
+        </button>
+        <button v-if="authStore.isAdmin" class="btn" :disabled="selectedTaskIds.length === 0" @click="openBatchAssign">
+          <svg viewBox="0 0 16 16"><path d="M8 3a2.5 2.5 0 100 5 2.5 2.5 0 000-5zM3 13c0-2.2 2.2-4 5-4s5 1.8 5 4"/></svg>批量分配{{ selectedTaskIds.length ? `（${selectedTaskIds.length}）` : '' }}
+        </button>
         <button v-if="authStore.canManage" class="btn btn-primary" @click="openCreate">
           <svg viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></svg>创建任务
         </button>
@@ -28,6 +37,7 @@
       <button class="f-reset" @click="resetFilters">
         <svg viewBox="0 0 16 16"><path d="M3 3l10 10M13 3L3 13"/></svg>重置
       </button>
+      <span v-if="selectedTaskIds.length" class="selection-count">已选 {{ selectedTaskIds.length }} 项</span>
     </div>
 
     <!-- Task table -->
@@ -35,6 +45,17 @@
       <table class="tbl">
         <thead>
           <tr>
+            <th class="select-col">
+              <input
+                type="checkbox"
+                class="task-checkbox"
+                :checked="isCurrentPageAllSelected"
+                :indeterminate="isCurrentPagePartlySelected"
+                :disabled="currentPageSelectableIds.length === 0"
+                aria-label="选择当前页全部任务"
+                @change="toggleCurrentPage"
+              />
+            </th>
             <th>任务编号</th>
             <th>项目名称</th>
             <th>检查标准</th>
@@ -47,24 +68,35 @@
         </thead>
         <tbody>
           <tr v-if="loading">
-            <td colspan="8" style="text-align:center;padding:40px;color:var(--ink-400)">加载中...</td>
+            <td colspan="9" style="text-align:center;padding:40px;color:var(--ink-400)">加载中...</td>
           </tr>
           <tr v-else-if="tasks.length === 0">
-            <td colspan="8" style="text-align:center;padding:40px;color:var(--ink-400)">暂无数据</td>
+            <td colspan="9" style="text-align:center;padding:40px;color:var(--ink-400)">暂无数据</td>
           </tr>
           <tr v-for="row in tasks" :key="row.task_id">
-            <td>{{ row.task_id }}</td>
+            <td class="select-col">
+              <input
+                type="checkbox"
+                class="task-checkbox"
+                :checked="isTaskSelected(row.task_id)"
+                title="选择此任务"
+                :aria-label="`选择任务 ${row.task_id}`"
+                @change="toggleTask(row.task_id)"
+              />
+            </td>
+            <td class="task-id-cell">{{ row.task_id }}</td>
             <td style="text-align:left;font-family:var(--sans);font-weight:600;color:var(--ink-900)">{{ row.project_name || '-' }}</td>
             <td>
               <span v-if="row.standard_type === 'diecheng'" class="kt kt-blue">蝶城</span>
+              <span v-else-if="row.standard_type === 'lizhi'" class="kt kt-lizhi">砺质</span>
               <span v-else class="kt kt-warn">非蝶城</span>
             </td>
             <td>{{ row.check_date || '-' }}</td>
             <td><span class="st" :class="statusClass(row.status)">{{ statusText(row.status) }}</span></td>
             <td>
               <div class="prog-wrap">
-                <div class="prog-bar"><div class="prog-fill" :style="{ width: Math.round((row.completed_modules || 0) / 8 * 100) + '%' }"></div></div>
-                <span class="prog-txt">{{ row.completed_modules || 0 }}/8</span>
+                <div class="prog-bar"><div class="prog-fill" :style="{ width: Math.round((row.completed_modules || 0) / moduleTotal(row.standard_type) * 100) + '%' }"></div></div>
+                <span class="prog-txt">{{ row.completed_modules || 0 }}/{{ moduleTotal(row.standard_type) }}</span>
               </div>
             </td>
             <td>
@@ -102,6 +134,28 @@
       </div>
     </div>
 
+    <!-- 批量导出评分结果 -->
+    <el-dialog v-model="showBatchExport" title="导出AI评分结果" width="520px" class="styled-dialog">
+      <el-radio-group v-model="batchExportScope" class="batch-export-options">
+        <el-radio value="selected" :disabled="selectedTaskIds.length === 0">
+          导出已选任务（{{ selectedTaskIds.length }}项）
+        </el-radio>
+        <el-radio value="filtered">
+          导出当前筛选全部（共{{ total }}项，跨全部分页）
+        </el-radio>
+      </el-radio-group>
+      <el-alert
+        title="仅导出已有AI评分结果的任务；未评分任务会自动跳过并在完成后提示数量。"
+        type="info"
+        :closable="false"
+        show-icon
+      />
+      <template #footer>
+        <el-button @click="showBatchExport = false">取消</el-button>
+        <el-button type="primary" :loading="exportingBatch" @click="onBatchExport">确认导出</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 创建任务弹窗 -->
     <el-dialog v-model="showCreate" title="创建检查任务" width="500px" class="styled-dialog">
       <el-form :model="newTask" label-width="100px" class="styled-form">
@@ -123,6 +177,61 @@
       <template #footer>
         <el-button @click="showCreate = false">取消</el-button>
         <el-button type="primary" @click="onCreateTask" :loading="creating">创建</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 批量创建任务弹窗 -->
+    <el-dialog v-model="showBatchCreate" title="批量创建检查任务" width="520px" class="styled-dialog">
+      <el-form :model="batchTask" label-width="100px" class="styled-form">
+        <el-form-item label="项目名称" required>
+          <el-select v-model="batchTask.project_ids" multiple filterable placeholder="选择项目（可多选）" style="width: 100%">
+            <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="检查标准" required>
+          <el-select v-model="batchTask.standard_type" placeholder="选择检查标准" style="width: 100%">
+            <el-option v-for="s in standardTypes" :key="s.value" :label="s.label" :value="s.value" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="检查日期" required>
+          <el-date-picker v-model="batchTask.check_date" type="date" placeholder="选择日期"
+            value-format="YYYY-MM-DD" style="width: 100%" />
+        </el-form-item>
+      </el-form>
+      <el-alert
+        title="为所选的每个项目各创建一个任务；项目当日同标准已有任务时自动跳过，不会重复创建。"
+        type="info"
+        :closable="false"
+        show-icon
+      />
+      <template #footer>
+        <el-button @click="showBatchCreate = false">取消</el-button>
+        <el-button type="primary" @click="onBatchCreateTask" :loading="batchCreating">批量创建</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 批量分配弹窗 -->
+    <el-dialog v-model="showBatchAssign" title="批量分配检查员" width="700px" class="styled-dialog">
+      <el-alert
+        :title="`将把下面的分配方案应用到已选的 ${selectedTaskIds.length} 个任务；已有分配记录的任务会自动跳过。`"
+        type="info"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 12px"
+      />
+      <el-table :data="batchAssignModules" border class="styled-table">
+        <el-table-column prop="name" label="检查模块" width="150" />
+        <el-table-column label="检查员" min-width="200">
+          <template #default="{ row }">
+            <el-select v-model="row.inspector_id" placeholder="选择检查员（留空则不分配该模块）" clearable style="width: 100%">
+              <el-option v-for="u in inspectors" :key="u.id" :label="`${u.real_name} (${u.role === 'site_supervisor' ? '阵地督导' : u.role === 'field_supervisor' ? '驻场经理' : '检查员'})`" :value="u.id" />
+            </el-select>
+          </template>
+        </el-table-column>
+      </el-table>
+      <template #footer>
+        <el-button @click="showBatchAssign = false">取消</el-button>
+        <el-button type="primary" @click="onBatchAssign" :loading="batchAssigning">保存分配</el-button>
       </template>
     </el-dialog>
 
@@ -253,8 +362,10 @@
               <el-table-column label="得分" width="120" align="center">
                 <template #default="{ row }">
                   <span v-if="row.is_skipped" class="text-muted">已跳过</span>
-                  <span v-else class="editable-score" :class="getItemScoreClass(row.score)" @click="openEditDialog(row)">
-                    {{ Number(row.score).toFixed(2) }} / 5
+                  <span v-else class="editable-score" :class="getItemScoreClass(row.score)" @click="openEditDialog(row, mod)">
+                    {{ Number(row.score).toFixed(2) }}
+                    <template v-if="scoringData.standard_type !== 'lizhi'"> / 5</template>
+                    <template v-else-if="mod.role !== 'deduction'"> / {{ Number(row.max_score ?? mod.max_score).toFixed(2) }}</template>
                     <el-icon v-if="row.is_edited" size="12" color="var(--blue)"><Edit /></el-icon>
                   </span>
                   <el-tag v-if="row.is_fallback" type="warning" size="small" effect="dark" style="margin-left:4px">降级</el-tag>
@@ -305,7 +416,7 @@
               </el-table-column>
               <el-table-column label="操作" width="120" align="center">
                 <template #default="{ row }">
-                  <el-button v-if="!row.is_skipped" size="small" type="primary" link @click="openEditDialog(row)">
+                  <el-button v-if="!row.is_skipped" size="small" type="primary" link @click="openEditDialog(row, mod)">
                     编辑
                   </el-button>
                   <el-button v-if="authStore.isAdmin && !row.is_skipped" size="small" type="danger" link @click.stop="onRecallItem(mod, row)">
@@ -335,8 +446,8 @@
         <el-form-item label="检查项">
           <span>{{ editForm.item_name }}</span>
         </el-form-item>
-        <el-form-item label="分数 (0-5)">
-          <el-input-number v-model="editForm.score" :min="0" :max="5" :step="0.5" :precision="1" />
+        <el-form-item :label="editScoreLabel">
+          <el-input-number v-model="editForm.score" :min="editScoreMin" :max="editScoreMax" :step="0.5" :precision="1" />
         </el-form-item>
         <el-form-item label="评分依据">
           <el-input v-model="editForm.scoring_basis" type="textarea" :rows="3" />
@@ -443,8 +554,8 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Loading, Plus, RefreshLeft, User, View, Delete, CaretRight, Select, CircleCheck, SuccessFilled, CircleCloseFilled } from '@element-plus/icons-vue'
-import { getTasks, createTask, getAssignments, assignModule, getAllProjects, getUsers } from '../../api/pc'
-import { getScoringResults, getScoringStatus, startScoring, editScore, rescoreModule, exportScoringExcel, getScoringSummary, getModuleDetail } from '../../api/scoring'
+import { getTasks, getTaskDetail, createTask, createTaskBatch, createTaskAssignBatch, getAssignments, assignModule, getAllProjects, getUsers } from '../../api/pc'
+import { getScoringResults, getScoringStatus, startScoring, editScore, rescoreModule, exportScoringExcel, exportBatchScoringExcel, getScoringSummary, getModuleDetail } from '../../api/scoring'
 import { recallModule, recallItem } from '../../api/inspection'
 import { runFullPipeline, getPipelineStatus } from '../../api/orchestrator'
 import { useAuthStore } from '../../stores/auth'
@@ -461,18 +572,41 @@ const loading = ref(false)
 const total = ref(0)
 const page = ref(1)
 const filters = ref({ project_id: authStore.activeProjectId || null, status: null })
+const selectedTaskIds = ref([])
+const selectedTaskIdSet = computed(() => new Set(selectedTaskIds.value))
+const currentPageSelectableIds = computed(() => tasks.value.map(task => task.task_id))
+const isCurrentPageAllSelected = computed(() => (
+  currentPageSelectableIds.value.length > 0
+  && currentPageSelectableIds.value.every(taskId => selectedTaskIdSet.value.has(taskId))
+))
+const isCurrentPagePartlySelected = computed(() => {
+  const selectedCount = currentPageSelectableIds.value.filter(taskId => selectedTaskIdSet.value.has(taskId)).length
+  return selectedCount > 0 && selectedCount < currentPageSelectableIds.value.length
+})
+
+const showBatchExport = ref(false)
+const batchExportScope = ref('filtered')
+const exportingBatch = ref(false)
 
 const showCreate = ref(false)
 const creating = ref(false)
 const standardTypes = ref([])
 const newTask = ref({ project_id: null, check_date: '', standard_type: 'diecheng' })
 
+const showBatchCreate = ref(false)
+const batchCreating = ref(false)
+const batchTask = ref({ project_ids: [], check_date: '', standard_type: 'diecheng' })
+
+const showBatchAssign = ref(false)
+const batchAssigning = ref(false)
+const batchAssignModules = ref([])
+
 const showAssign = ref(false)
 const currentTaskId = ref('')
 const moduleList = ref([])
 const savingAssign = ref(false)
 
-const MODULE_NAMES = ['客户服务', '安全管理', 'EHS及风险管理', '环境管理', '机电运维', '设施维护', '综合管理', '财务管理']
+const MODULE_NAMES = ['客户服务', '安全管理', 'EHS及风险管理', '环境管理', '机电运维', '设施维护', '综合管理', '财务管理']  // 蝶城默认（用于任务创建时选择标准前的占位）
 
 // ===== 评分状态追踪 =====
 const scoringStatusMap = ref({})   // { task_id: 'scoring' | 'completed' | null }
@@ -586,19 +720,163 @@ const fetchInspectors = async () => {
 const fetchStandardTypes = () => {
   standardTypes.value = [
     { value: 'diecheng', label: '蝶城版' },
-    { value: 'feidiecheng', label: '非蝶城版' }
+    { value: 'feidiecheng', label: '非蝶城版' },
+    { value: 'lizhi', label: '砺质版' }
   ]
 }
 
-const onSearch = () => { page.value = 1; fetchTasks() }
+const clearTaskSelection = () => { selectedTaskIds.value = [] }
+const onSearch = () => { clearTaskSelection(); page.value = 1; fetchTasks() }
 const resetFilters = () => { filters.value = { project_id: null, status: null }; onSearch() }
+
+const isTaskSelected = (taskId) => selectedTaskIdSet.value.has(taskId)
+
+const toggleTask = (taskId) => {
+  const next = new Set(selectedTaskIds.value)
+  if (next.has(taskId)) next.delete(taskId)
+  else next.add(taskId)
+  selectedTaskIds.value = Array.from(next)
+}
+
+const toggleCurrentPage = (event) => {
+  const next = new Set(selectedTaskIds.value)
+  currentPageSelectableIds.value.forEach(taskId => {
+    if (event.target.checked) next.add(taskId)
+    else next.delete(taskId)
+  })
+  selectedTaskIds.value = Array.from(next)
+}
+
+const openBatchExport = () => {
+  batchExportScope.value = selectedTaskIds.value.length > 0 ? 'selected' : 'filtered'
+  showBatchExport.value = true
+}
+
+const onBatchExport = async () => {
+  if (batchExportScope.value === 'selected' && selectedTaskIds.value.length === 0) {
+    ElMessage.warning('请至少选择一个已有AI评分的任务')
+    return
+  }
+  exportingBatch.value = true
+  try {
+    const payload = batchExportScope.value === 'selected'
+      ? { scope: 'selected', task_ids: selectedTaskIds.value }
+      : {
+          scope: 'filtered',
+          project_id: filters.value.project_id || null,
+          status: filters.value.status || null
+        }
+    const result = await exportBatchScoringExcel(payload)
+    const url = window.URL.createObjectURL(result.blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = result.filename
+    document.body.appendChild(anchor)
+    anchor.click()
+    document.body.removeChild(anchor)
+    window.URL.revokeObjectURL(url)
+
+    const skippedText = result.skippedCount > 0 ? `，跳过未评分任务${result.skippedCount}项` : ''
+    ElMessage.success(`已导出${result.exportedCount}项${skippedText}`)
+    if (batchExportScope.value === 'selected') clearTaskSelection()
+    showBatchExport.value = false
+  } catch (error) {
+    ElMessage.error(error.message || '批量导出失败')
+  } finally {
+    exportingBatch.value = false
+  }
+}
 
 const statusType = (s) => ({ pending: 'info', in_progress: 'warning', completed: 'success' }[s] || 'info')
 const statusText = (s) => ({ pending: '待开始', in_progress: '进行中', completed: '已完成' }[s] || s)
+// 各检查标准的模块总数（蝶城/非蝶城=8，砺质=5），用于进度条分母
+const moduleTotal = (std) => (std === 'lizhi' ? 5 : 8)
 
 const openCreate = () => {
   newTask.value = { project_id: null, check_date: '', standard_type: 'diecheng' }
   showCreate.value = true
+}
+
+const openBatchCreate = () => {
+  batchTask.value = { project_ids: [], check_date: '', standard_type: 'diecheng' }
+  showBatchCreate.value = true
+}
+
+const openBatchAssign = async () => {
+  if (!selectedTaskIds.value.length) {
+    ElMessage.warning('请先勾选要分配的任务')
+    return
+  }
+  try {
+    // 模块清单取自第一个选中任务（按其检查标准）；跨页混选其他标准的任务由后端分项校验兜底
+    const detail = await getTaskDetail(selectedTaskIds.value[0])
+    batchAssignModules.value = (detail.modules || []).map(m => ({ name: m.module_name, inspector_id: null }))
+    if (!batchAssignModules.value.length) {
+      ElMessage.warning('未能获取模块清单，请稍后重试')
+      return
+    }
+  } catch (e) {
+    ElMessage.error('获取模块清单失败')
+    return
+  }
+  showBatchAssign.value = true
+}
+
+const onBatchAssign = async () => {
+  const assignments = batchAssignModules.value
+    .filter(m => m.inspector_id)
+    .map(m => ({ module_name: m.name, inspector_id: m.inspector_id }))
+  if (!assignments.length) {
+    ElMessage.warning('请至少为一个模块选择检查员')
+    return
+  }
+  batchAssigning.value = true
+  try {
+    const result = await createTaskAssignBatch({ task_ids: selectedTaskIds.value, assignments })
+    const parts = [`成功分配 ${result.assigned_count} 个任务`]
+    if (result.skipped_count > 0) parts.push(`跳过 ${result.skipped_count} 个（已有分配记录）`)
+    if (result.failed_count > 0) {
+      const reasons = [...new Set(result.failed.map(f => f.reason))].join('；')
+      parts.push(`失败 ${result.failed_count} 个（${reasons}）`)
+    }
+    if (result.assigned_count > 0) ElMessage.success(parts[0])
+    if (result.skipped_count > 0 || result.failed_count > 0) {
+      ElMessage.warning(parts.slice(result.assigned_count > 0 ? 1 : 0).join('；'))
+    }
+    showBatchAssign.value = false
+    if (result.assigned_count > 0) fetchTasks()
+  } catch (e) {
+    ElMessage.error(e.response?.data?.detail || '批量分配失败')
+  } finally {
+    batchAssigning.value = false
+  }
+}
+
+const onBatchCreateTask = async () => {
+  if (!batchTask.value.project_ids.length || !batchTask.value.check_date || !batchTask.value.standard_type) {
+    ElMessage.warning('请选择项目、检查标准和日期')
+    return
+  }
+  batchCreating.value = true
+  try {
+    const result = await createTaskBatch(batchTask.value)
+    const parts = [`成功创建 ${result.created_count} 个任务`]
+    if (result.skipped_count > 0) {
+      const names = result.skipped.map(s => s.project_name).join('、')
+      parts.push(`跳过 ${result.skipped_count} 个（${names} 当日同标准任务已存在）`)
+    }
+    if (result.failed_count > 0) parts.push(`失败 ${result.failed_count} 个`)
+    if (result.created_count > 0) ElMessage.success(parts[0])
+    if (result.skipped_count > 0 || result.failed_count > 0) {
+      ElMessage.warning(parts.slice(result.created_count > 0 ? 1 : 0).join('；'))
+    }
+    showBatchCreate.value = false
+    if (result.created_count > 0) fetchTasks()
+  } catch (e) {
+    ElMessage.error(e.response?.data?.detail || '批量创建失败')
+  } finally {
+    batchCreating.value = false
+  }
 }
 
 const onCreateTask = async () => {
@@ -622,12 +900,16 @@ const onCreateTask = async () => {
 const openAssign = async (row) => {
   currentTaskId.value = row.task_id
   try {
-    const res = await getAssignments(row.task_id)
-    const assigned = res.items || []
-    moduleList.value = MODULE_NAMES.map(name => {
-      const a = assigned.find(x => x.module_name === name)
-      return { name, inspector_id: a ? a.inspector_id : null }
-    })
+    // 从任务详情取模块列表（按任务自身的检查标准：蝶城8模块 / 砺质5模块）
+    const detail = await getTaskDetail(row.task_id)
+    const taskModules = detail.modules || []
+    // 合并已分配信息
+    moduleList.value = taskModules.map(m => ({
+      name: m.module_name,
+      inspector_id: m.inspector_id || null,
+      max_score: m.max_score,
+      role: m.role,
+    }))
   } catch (e) {
     moduleList.value = MODULE_NAMES.map(name => ({ name, inspector_id: null }))
   }
@@ -698,15 +980,35 @@ const editForm = ref({
   scoring_id: '',
   item_name: '',
   score: 5,
+  max_score: 5,
+  module_role: 'score',
+  standard_type: 'diecheng',
   scoring_basis: '',
   edit_reason: ''
 })
 
-const openEditDialog = (row) => {
+const editScoreMin = computed(() => (
+  editForm.value.standard_type === 'lizhi' && editForm.value.module_role === 'deduction' ? -99.9 : 0
+))
+const editScoreMax = computed(() => {
+  if (editForm.value.standard_type !== 'lizhi') return 5
+  if (editForm.value.module_role === 'deduction') return 0
+  return Number(editForm.value.max_score || 0)
+})
+const editScoreLabel = computed(() => {
+  if (editForm.value.standard_type !== 'lizhi') return '分数 (0-5)'
+  if (editForm.value.module_role === 'deduction') return '扣分 (≤0)'
+  return `分数 (0-${editScoreMax.value})`
+})
+
+const openEditDialog = (row, mod) => {
   editForm.value = {
     scoring_id: row.scoring_id,
     item_name: row.item_name,
     score: Number(row.score),
+    max_score: Number(row.max_score ?? mod?.max_score ?? 5),
+    module_role: mod?.role || 'score',
+    standard_type: scoringData.value?.standard_type || 'diecheng',
     scoring_basis: row.scoring_basis || '',
     edit_reason: ''
   }
@@ -988,10 +1290,13 @@ const loadSummaryAndShow = async (taskId) => {
   const data = {
     total_score: res.total_score || 0,
     project_name: res.project_name || '',
+    standard_type: res.standard_type || 'diecheng',
     modules: (res.modules || []).map(m => ({
       module_name: m.module_name,
       module_pct_score: m.module_pct_score,
       weight_ratio: m.weight_ratio,
+      max_score: m.max_score,
+      role: m.role || 'score',
       items_count: m.items_count,
       record_id: m.record_id || null, // 用于退回功能
       items: null, // 标记为未加载，展开时按需拉取
@@ -1178,73 +1483,8 @@ onUnmounted(() => {
 }
 
 /* ==================== Page Header (prototype .phdr) ==================== */
-.phdr {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  margin-bottom: 20px;
-}
-
-.phdr h1 {
-  font-size: 22px;
-  font-weight: 800;
-  color: var(--ink-900);
-  letter-spacing: -0.4px;
-  margin: 0;
-}
-
-.phdr-sub {
-  font-size: 13px;
-  color: var(--ink-400);
-  margin-top: 3px;
-}
-
-.phdr-acts {
-  display: flex;
-  gap: 8px;
-}
 
 /* ==================== Buttons (prototype .btn) ==================== */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 10px 20px;
-  border-radius: var(--r);
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.12s var(--ease);
-  border: 1px solid var(--ink-100);
-  background: var(--bg-card);
-  color: var(--ink-800);
-  font-family: var(--sans);
-}
-
-.btn:hover {
-  background: var(--bg-muted);
-  border-color: var(--ink-200);
-}
-
-.btn svg {
-  width: 16px;
-  height: 16px;
-  stroke: currentColor;
-  fill: none;
-  stroke-width: 1.8;
-}
-
-.btn-primary {
-  background: var(--orange);
-  color: #fff;
-  border-color: var(--orange);
-}
-
-.btn-primary:hover {
-  background: var(--orange-hover);
-  border-color: var(--orange-hover);
-  color: #fff;
-}
 
 /* ==================== Filters (prototype .filters) ==================== */
 .filters {
@@ -1306,6 +1546,13 @@ onUnmounted(() => {
   stroke-width: 2;
 }
 
+.selection-count {
+  margin-left: auto;
+  color: var(--blue);
+  font-size: 13px;
+  font-weight: 600;
+}
+
 /* ==================== Card (prototype .card) ==================== */
 .card {
   background: var(--bg-card);
@@ -1337,6 +1584,33 @@ onUnmounted(() => {
   padding-left: 20px;
 }
 
+.tbl th.select-col,
+.tbl td.select-col {
+  width: 46px;
+  padding-left: 14px;
+  padding-right: 6px;
+  text-align: center;
+  font-family: var(--sans);
+}
+
+.tbl td.task-id-cell {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-400);
+}
+
+.task-checkbox {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  accent-color: var(--blue);
+}
+
+.task-checkbox:disabled {
+  cursor: not-allowed;
+}
+
 .tbl td {
   font-size: 14px;
   font-weight: 500;
@@ -1352,6 +1626,23 @@ onUnmounted(() => {
   font-family: var(--mono);
   font-size: 12px;
   color: var(--ink-400);
+}
+
+.tbl th.select-col,
+.tbl td.select-col {
+  padding-left: 14px;
+  padding-right: 6px;
+  text-align: center;
+  font-family: var(--sans);
+  color: var(--ink-600);
+}
+
+.batch-export-options {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 20px;
 }
 
 .tbl tbody tr {
@@ -1461,6 +1752,11 @@ onUnmounted(() => {
 .kt-warn {
   background: var(--warn-bg);
   color: var(--warn);
+}
+
+.kt-lizhi {
+  background: var(--bg-muted);
+  color: var(--ink-700);
 }
 
 .kt-muted {
@@ -1989,10 +2285,5 @@ onUnmounted(() => {
 
 /* ==================== Responsive ==================== */
 @media (max-width: 900px) {
-  .phdr {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
-  }
 }
 </style>

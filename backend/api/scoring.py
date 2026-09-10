@@ -9,11 +9,12 @@ import threading
 import uuid as _uuid
 import io
 import os
+import math
 from datetime import datetime
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from typing import List, Optional, Literal
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi.responses import FileResponse, StreamingResponse
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 import openpyxl
@@ -21,7 +22,7 @@ from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
 
 from database import get_db, SessionLocal
 from models.models import User, InspectionTask, InspectionRecord, Issue, ScoringResult, Photo
-from api.deps import get_current_user, check_role
+from api.deps import get_current_user, check_role, apply_task_visibility
 from config import settings
 from core.llm_client import QwenClient
 from core.scoring_tracker import scoring_tracker
@@ -71,10 +72,35 @@ class ModuleScore(BaseModel):
 
 
 class ScoreEditRequest(BaseModel):
-    score: float  # 0-5
+    score: float  # 蝶城/非蝶城为0-5；砺质按检查项max_score（扣分模块允许负分）
     scoring_basis: Optional[str] = None
     improvement_suggestion: Optional[str] = None
     edit_reason: Optional[str] = None  # 人工修改原因分类
+
+
+class BatchScoringExportRequest(BaseModel):
+    scope: Literal["selected", "filtered"]
+    task_ids: List[str] = Field(default_factory=list)
+    project_id: Optional[int] = None
+    status: Optional[Literal["pending", "in_progress", "completed"]] = None
+
+
+def _get_item_max_score(standard_type: str, module_name: str, item_id: str) -> float:
+    """返回单项评分上限；砺质取检查表max_score，其它标准固定为5。"""
+    if standard_type != "lizhi":
+        return 5.0
+
+    from core import standards as _stds
+    template_item = next(
+        (item for item in load_template_items(module_name, standard_type)
+         if item.get("item_id") == item_id),
+        None,
+    )
+    return float(
+        (template_item or {}).get("max_score")
+        or _stds.get_module_cfg(standard_type, module_name).get("max_score")
+        or 0
+    )
 
 
 # ==================== 核心评分逻辑 ====================
@@ -167,12 +193,13 @@ def _check_and_trigger_report(task_id: str):
             if task.status == "reporting":
                 existing_report = db.query(ReportModel).filter(ReportModel.task_id == task_id).first()
                 if not existing_report:
-                    from api.tasks import MODULE_NAMES
+                    from core import standards as _stds
+                    _total = len(_stds.get_modules(task.standard_type or "diecheng"))
                     done_count = db.query(InspectionRecord).filter(
                         InspectionRecord.task_id == task_id,
                         InspectionRecord.status == "completed"
                     ).count()
-                    task.status = "completed" if done_count >= len(MODULE_NAMES) else "in_progress"
+                    task.status = "completed" if done_count >= _total else "in_progress"
                     logger.warning(f"_check_and_trigger_report: 任务 {task_id} 卡在 reporting，重置为 {task.status}")
                     db.commit()
 
@@ -181,9 +208,9 @@ def _check_and_trigger_report(task_id: str):
             if existing_report:
                 return
 
-            # 检查所有模板模块是否全部完成（而非仅已分配模块）
-            from api.tasks import MODULE_NAMES
-            total_modules = len(MODULE_NAMES)
+            # 检查所有模板模块是否全部完成（按任务自身的检查标准）
+            from core import standards as _stds
+            total_modules = len(_stds.get_modules(task.standard_type or "diecheng"))
 
             completed_records = db.query(InspectionRecord).filter(
                 InspectionRecord.task_id == task_id,
@@ -280,56 +307,12 @@ def _check_and_trigger_report(task_id: str):
 
 
 def _save_timeout_defaults(db: Session, task_id: str, module_name: str, record_id: str):
-    """超时时保存默认分数（问题项3分，合格项5分）"""
-    try:
-        # 先清除旧结果
-        db.query(ScoringResult).filter(
-            ScoringResult.record_id == record_id,
-            ScoringResult.module_name == module_name
-        ).delete()
-        db.commit()
-
-        # 获取问题列表
-        issues = db.query(Issue).filter(
-            Issue.record_id == record_id,
-            Issue.module_name == module_name
-        ).all()
-        issue_item_ids = set(i.item_id for i in issues)
-
-        # 获取模板（使用任务的 standard_type）
-        record = db.query(InspectionRecord).filter(InspectionRecord.record_id == record_id).first()
-        standard_type = record.task.standard_type if record and record.task else "diecheng"
-        template_items = load_template_items(module_name, standard_type)
-        if not template_items:
-            return
-
-        today = datetime.now().strftime("%Y%m%d")
-        count = db.query(ScoringResult).filter(
-            ScoringResult.scoring_id.like(f"SCR-{today}-%")
-        ).count()
-
-        for i, item in enumerate(template_items):
-            score = 3.0 if item["item_id"] in issue_item_ids else 5.0
-            weight = item.get("weight", 0.01)
-            scoring_id = f"SCR-{_uuid.uuid4().hex[:12]}"
-            result = ScoringResult(
-                scoring_id=scoring_id,
-                record_id=record_id,
-                module_name=module_name,
-                item_id=item["item_id"],
-                item_name=item.get("item_name", ""),
-                score=score,
-                weight=weight,
-                weighted_score=score * weight,
-                scoring_basis="评分超时，使用默认分数",
-                improvement_suggestion="",
-                is_skipped=False
-            )
-            db.add(result)
-        db.commit()
-        logger.info(f"超时默认分数已保存: {module_name}")
-    except Exception as e:
-        logger.error(f"保存超时默认分数失败: {e}")
+    """超时时保存默认分数（委托 scoring_service.save_default_scores，支持多标准）"""
+    from core.scoring_service import save_default_scores
+    record = db.query(InspectionRecord).filter(InspectionRecord.record_id == record_id).first()
+    standard_type = record.task.standard_type if record and record.task else "diecheng"
+    save_default_scores(db, task_id, module_name, record_id, standard_type=standard_type,
+                        reason="评分超时，使用默认分数")
 
 
 def _compute_and_save_total_score(task_id: str):
@@ -337,12 +320,15 @@ def _compute_and_save_total_score(task_id: str):
     计算项目总分
     - 已评分模块：按实际分数计算
     - 未评分模块：按100%满分计算
+    计分模型按 task.standard_type 选择（蝶城/非蝶城=加权5分制；砺质=封顶+扣分）。
     """
+    from core.scoring_aggregation import aggregate
     db = SessionLocal()
     try:
         task = db.query(InspectionTask).filter(InspectionTask.task_id == task_id).first()
         if not task:
             return
+        standard_type = task.standard_type or "diecheng"
 
         results = db.query(ScoringResult).join(
             InspectionRecord, ScoringResult.record_id == InspectionRecord.record_id
@@ -356,22 +342,16 @@ def _compute_and_save_total_score(task_id: str):
             modules_data[r.module_name]["raw_score_sum"] += float(r.weighted_score)
             modules_data[r.module_name]["weight_sum"] += float(r.weight)
 
-        # 更新已评分模块的百分制得分
+        # 统一计算（按 standard_type 自动选择计分模型）
+        agg = aggregate(standard_type, modules_data)
+        module_pct_map = agg["module_pct"]
+
+        # 回填每行所属模块的得分
         for r in results:
-            data = modules_data.get(r.module_name)
-            if data and data["weight_sum"] > 0:
-                r.module_pct_score = (data["raw_score_sum"] / (5 * data["weight_sum"])) * 100
+            if r.module_name in module_pct_map:
+                r.module_pct_score = module_pct_map[r.module_name]
 
-        # 计算项目总分：已评分模块的加权得分之和
-        project_total = 0
-        for module_name, module_weight in settings.MODULE_WEIGHTS.items():
-            data = modules_data.get(module_name)
-            if data and data["weight_sum"] > 0:
-                max_score = 5 * data["weight_sum"]
-                module_pct = (data["raw_score_sum"] / max_score * 100)
-                project_total += module_pct * module_weight
-
-        task.total_score = round(project_total, 2)
+        task.total_score = agg["total"]
         db.commit()
     finally:
         db.close()
@@ -382,160 +362,17 @@ async def _score_module_async(
     module_name: str,
     record_id: str
 ):
-    """异步评分核心逻辑"""
+    """异步评分核心逻辑（统一调用 score_module_core，消除重复实现）"""
+    from core.scoring_service import score_module_core
     db = SessionLocal()
-
     try:
-        # 获取检查记录
         record = db.query(InspectionRecord).filter(InspectionRecord.record_id == record_id).first()
         if not record:
             logger.warning(f"记录不存在: {record_id}")
             return
-
-        # 清除该模块的旧评分结果
-        deleted = db.query(ScoringResult).filter(
-            ScoringResult.record_id == record_id,
-            ScoringResult.module_name == module_name
-        ).delete()
-        if deleted > 0:
-            logger.info(f"清除旧评分: {module_name} ({deleted}条)")
-            db.commit()
-
-        # 获取该模块的问题
-        issues = db.query(Issue).filter(
-            Issue.record_id == record_id,
-            Issue.module_name == module_name
-        ).all()
-
-        issues_by_item = {}
-        for issue in issues:
-            if issue.item_id not in issues_by_item:
-                issues_by_item[issue.item_id] = []
-            issues_by_item[issue.item_id].append({
-                "description": issue.description,
-                "severity": issue.severity,
-                "location": issue.location
-            })
-
-        # 从模板获取检查项（传入 standard_type）
         standard_type = record.task.standard_type if record.task else "diecheng"
-        template_items = load_template_items(module_name, standard_type)
-        if not template_items:
-            logger.warning(f"无模板数据: {module_name}")
-            return
-
-        # 分离合格项和有问题项
-        qualified_items = []
-        problem_items = []
-
-        for item in template_items:
-            item_id = item.get("item_id")
-            item_issues = issues_by_item.get(item_id, [])
-            entry = {
-                "item_id": item_id,
-                "item_name": item.get("item_name", ""),
-                "check_standard": item.get("check_standard", ""),
-                "check_method": item.get("check_method", ""),
-                "scoring_rule": item.get("scoring_rule", "完全符合5分"),
-                "weight": item.get("weight", 0.01),
-                "issues": item_issues,
-                "is_skipped": False
-            }
-
-            if not item_issues:
-                qualified_items.append(entry)
-            else:
-                problem_items.append(entry)
-
-        logger.info(f"{module_name}: 合格{len(qualified_items)}项(直接满分), 有问题{len(problem_items)}项(AI评分)")
-
-        # 合格项直接给满分
-        results = []
-        for item in qualified_items:
-            results.append({
-                "item_id": item["item_id"],
-                "item_name": item["item_name"],
-                "score": 5,
-                "scoring_basis": "检查合格，无问题发现，给予满分5分",
-                "improvement_suggestion": ""
-            })
-
-        # 有问题项调用AI评分
-        if problem_items and settings.DASHSCOPE_API_KEY:
-            # 构建记忆上下文（RAG + 历史评分参考）
-            memory_context = _build_memory_context(
-                task_id=task_id,
-                project_id=record.project_id,
-                module_name=module_name,
-                problem_items=problem_items
-            )
-
-            llm = QwenClient()
-            logger.info(f"AI评分: {module_name} ({len(problem_items)}项有问题)")
-            ai_results = await llm.score_module(module_name, problem_items, memory_context=memory_context)
-            logger.info(f"AI返回: {module_name} ({len(ai_results)}项)")
-            results.extend(ai_results)
-        elif problem_items:
-            # 无API Key，使用简单规则评分
-            for item in problem_items:
-                issue_count = len(item["issues"])
-                score = max(0, 5 - issue_count)
-                results.append({
-                    "item_id": item["item_id"],
-                    "item_name": item["item_name"],
-                    "score": score,
-                    "scoring_basis": f"发现{issue_count}个问题，扣{issue_count}分",
-                    "improvement_suggestion": ""
-                })
-
-        # 合并所有检查项
-        all_items = qualified_items + problem_items
-
-        # 保存评分结果（分批提交，每20条commit一次，减少DB锁持有时间）
-        batch_size = 20
-        for i, item_result in enumerate(results):
-            scoring_id = f"SCR-{_uuid.uuid4().hex[:12]}"
-
-            # 优先使用AI评分时注入的原始数据，兼容旧逻辑
-            item_id = item_result.get("item_id")
-            item_name = item_result.get("item_name", "")
-            score = item_result.get("score", 5)
-
-            original_item = next((x for x in all_items if x["item_id"] == item_id), {}) if item_id else {}
-
-            weight = item_result.get("_weight") or original_item.get("weight", 0.01)
-            check_standard = item_result.get("_check_standard") or original_item.get("check_standard", "")
-            check_method = item_result.get("_check_method") or original_item.get("check_method", "")
-            scoring_rule = item_result.get("_scoring_rule") or original_item.get("scoring_rule", "")
-            if not item_name:
-                item_name = original_item.get("item_name", "")
-
-            result = ScoringResult(
-                scoring_id=scoring_id,
-                record_id=record_id,
-                module_name=module_name,
-                item_id=item_id,
-                item_name=item_name,
-                score=score,
-                weight=weight,
-                weighted_score=score * weight,
-                scoring_basis=item_result.get("scoring_basis", ""),
-                improvement_suggestion=item_result.get("improvement_suggestion", ""),
-                check_standard=check_standard,
-                check_method=check_method,
-                scoring_rule=scoring_rule,
-                is_skipped=item_result.get("is_skipped", False)
-            )
-            db.add(result)
-
-            # 每 batch_size 条提交一次，释放写锁
-            if (i + 1) % batch_size == 0:
-                db.commit()
-
-        # 提交剩余的记录
-        db.commit()
-        logger.info(f"保存完成: {module_name} ({len(results)}条)")
-
+        await score_module_core(db, task_id, module_name, record_id,
+                                standard_type=standard_type, project_id=record.project_id)
     except Exception as e:
         logger.error(f"评分异常 {module_name}: {str(e)}")
         import traceback
@@ -603,10 +440,11 @@ async def start_scoring(
                 try:
                     from agents.scoring import build_scoring_graph
                     graph = build_scoring_graph()
+                    std_type = task.standard_type or "diecheng"
                     loop.run_until_complete(graph.ainvoke({
                         "task_id": task_id,
                         "records": [],
-                        "standard_type": "diecheng",
+                        "standard_type": std_type,
                         "scoring_results": [],
                         "completed_modules": [],
                         "errors": [],
@@ -728,7 +566,13 @@ async def get_module_status(
     current_total = 0
     scored_total_weight = 0
 
-    for module_name, module_weight in settings.MODULE_WEIGHTS.items():
+    from core import standards as _stds
+    standard_type = task.standard_type or "diecheng"
+    is_lizhi = (standard_type == "lizhi")
+    module_iter = _stds.get_modules(standard_type)
+
+    for module_name in module_iter:
+        module_weight = _stds.get_module_cfg(standard_type, module_name).get("weight", 0)
         record = record_map.get(module_name)
         scored_info = scored_modules.get(module_name)
 
@@ -760,28 +604,35 @@ async def get_module_status(
             score_count = 0
             pct_score = None
 
-        # 模块贡献分数（只按已评分模块计算）
+        # 模块贡献分数：砺质=模块得分直接累加（含扣分模块负分）；其它=百分制×权重
         if pct_score is not None:
-            current_total += pct_score * module_weight
-            scored_total_weight += module_weight
+            if is_lizhi:
+                current_total += pct_score
+            else:
+                current_total += pct_score * module_weight
+                scored_total_weight += module_weight
 
         modules.append({
             "module_name": module_name,
             "weight": module_weight,
+            "max_score": _stds.get_module_cfg(standard_type, module_name).get("max_score"),
+            "role": _stds.get_module_cfg(standard_type, module_name).get("role", "score"),
             "inspection_status": inspection_status,
             "scoring_status": scoring_status,
             "score_count": score_count,
             "pct_score": round(pct_score, 2) if pct_score is not None else None
         })
 
-    # 项目总分 = Σ(模块百分制得分 × 模块权重)
-    current_total = current_total  # 已是加权后的总分，不需要再归一化
+    # 项目总分：砺质 clamp(0,100)；其它为加权总分
+    if is_lizhi:
+        current_total = max(0.0, min(current_total, 100.0))
 
     return {
         "task_id": task_id,
+        "standard_type": standard_type,
         "modules": modules,
         "scored_module_count": scored_count,
-        "total_module_count": len(settings.MODULE_WEIGHTS),
+        "total_module_count": len(module_iter),
         "current_total_score": round(current_total, 2)
     }
 
@@ -796,6 +647,7 @@ def _build_scoring_results(task_id: str, db: Session) -> dict:
     task = db.query(InspectionTask).filter(InspectionTask.task_id == task_id).first()
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
+    standard_type = task.standard_type or "diecheng"
 
     results = db.query(ScoringResult).join(
         InspectionRecord, ScoringResult.record_id == InspectionRecord.record_id
@@ -860,6 +712,7 @@ def _build_scoring_results(task_id: str, db: Session) -> dict:
             "item_id": r.item_id,
             "item_name": r.item_name,
             "score": float(r.score),
+            "max_score": _get_item_max_score(standard_type, r.module_name, r.item_id),
             "weight": float(r.weight),
             "weighted_score": float(r.weighted_score),
             "check_standard": r.check_standard or "",
@@ -875,28 +728,31 @@ def _build_scoring_results(task_id: str, db: Session) -> dict:
         modules_data[r.module_name]["raw_score_sum"] += float(r.weighted_score)
         modules_data[r.module_name]["weight_sum"] += float(r.weight)
 
-    # 计算模块得分和项目总分
-    module_scores = []
-    total_weighted_score = 0
+    # 计算模块得分和项目总分（按 standard_type 选择计分模型）
+    from core.scoring_aggregation import aggregate
+    from core import standards as _stds
+    is_lizhi = (standard_type == "lizhi")
+    agg = aggregate(standard_type, modules_data)
+    module_pct_map = agg["module_pct"]
 
-    for module_name, module_weight in settings.MODULE_WEIGHTS.items():
+    module_scores = []
+    for module_name in _stds.get_modules(standard_type):
+        module_weight = _stds.get_module_cfg(standard_type, module_name).get("weight", 0)
         data = modules_data.get(module_name)
         if not data or not data["items"]:
             continue
 
         raw_score_sum = data["raw_score_sum"]
-        weight_sum = data["weight_sum"]
-        max_score = 5 * weight_sum
-        module_pct = (raw_score_sum / max_score * 100) if max_score > 0 else 0
-
-        weighted_contribution = module_pct * module_weight
-        total_weighted_score += weighted_contribution
+        module_pct = module_pct_map.get(module_name, 0)
+        weighted_contribution = module_pct if is_lizhi else module_pct * module_weight
 
         module_scores.append({
             "module_name": module_name,
             "module_pct_score": round(module_pct, 2),
             "raw_score_sum": round(raw_score_sum, 4),
             "weight_ratio": module_weight,
+            "max_score": _stds.get_module_cfg(standard_type, module_name).get("max_score"),
+            "role": _stds.get_module_cfg(standard_type, module_name).get("role", "score"),
             "weighted_contribution": round(weighted_contribution, 2),
             "record_id": data.get("record_id"),
             "items": data["items"]
@@ -905,11 +761,11 @@ def _build_scoring_results(task_id: str, db: Session) -> dict:
     result = {
         "task_id": task_id,
         "project_name": task.project.name if task.project else "",
-        "standard_type": task.standard_type or "diecheng",
-        "total_score": round(total_weighted_score, 2),
+        "standard_type": standard_type,
+        "total_score": agg["total"],
         "modules": module_scores,
         "scored_module_count": len(module_scores),
-        "total_module_count": len(settings.MODULE_WEIGHTS),
+        "total_module_count": len(_stds.get_modules(standard_type)),
         "scoring_method": "Qwen-plus AI评分"
     }
 
@@ -945,12 +801,15 @@ async def get_scoring_summary(
             return {
                 "task_id": full["task_id"],
                 "project_name": full.get("project_name", ""),
+                "standard_type": full.get("standard_type", "diecheng"),
                 "total_score": full["total_score"],
                 "modules": [
                     {
                         "module_name": m["module_name"],
                         "module_pct_score": m["module_pct_score"],
                         "weight_ratio": m["weight_ratio"],
+                        "max_score": m.get("max_score"),
+                        "role": m.get("role", "score"),
                         "items_count": len(m.get("items", [])),
                         "record_id": m.get("record_id"),
                     }
@@ -988,19 +847,26 @@ async def get_scoring_summary(
 
     module_map = {r.module_name: {"raw_sum": float(r.raw_sum or 0), "weight_sum": float(r.weight_sum or 0), "cnt": r.cnt} for r in rows}
 
+    from core.scoring_aggregation import aggregate
+    from core import standards as _stds
+    standard_type = task.standard_type or "diecheng"
+    is_lizhi = (standard_type == "lizhi")
+    modules_data = {m: {"raw_score_sum": d["raw_sum"], "weight_sum": d["weight_sum"]} for m, d in module_map.items()}
+    agg = aggregate(standard_type, modules_data)
+
     module_summaries = []
-    total_score = 0
-    for module_name, module_weight in settings.MODULE_WEIGHTS.items():
+    for module_name in _stds.get_modules(standard_type):
+        module_weight = _stds.get_module_cfg(standard_type, module_name).get("weight", 0)
         data = module_map.get(module_name)
         if not data:
             continue
-        max_score = 5 * data["weight_sum"]
-        pct = (data["raw_sum"] / max_score * 100) if max_score > 0 else 0
-        total_score += pct * module_weight
+        pct = agg["module_pct"].get(module_name, 0)
         module_summaries.append({
             "module_name": module_name,
             "module_pct_score": round(pct, 2),
             "weight_ratio": module_weight,
+            "max_score": _stds.get_module_cfg(standard_type, module_name).get("max_score"),
+            "role": _stds.get_module_cfg(standard_type, module_name).get("role", "score"),
             "items_count": data["cnt"],
             "record_id": record_map.get(module_name),
         })
@@ -1008,7 +874,8 @@ async def get_scoring_summary(
     return {
         "task_id": task_id,
         "project_name": task.project.name if task.project else "",
-        "total_score": round(total_score, 2),
+        "standard_type": standard_type,
+        "total_score": agg["total"],
         "modules": module_summaries,
     }
 
@@ -1057,6 +924,9 @@ async def get_module_detail(
     if not results:
         return {"module_name": module_name, "items": []}
 
+    task = db.query(InspectionTask).filter(InspectionTask.task_id == task_id).first()
+    standard_type = task.standard_type if task else "diecheng"
+
     record_ids = list(set(r.record_id for r in results))
 
     # 查该模块的 issues 和 photos
@@ -1101,6 +971,7 @@ async def get_module_detail(
             "item_id": r.item_id,
             "item_name": r.item_name or "",
             "score": float(r.score),
+            "max_score": _get_item_max_score(standard_type, r.module_name, r.item_id),
             "weight": float(r.weight),
             "weighted_score": float(r.weighted_score),
             "check_standard": r.check_standard or "",
@@ -1146,8 +1017,33 @@ async def edit_score(
     if not result:
         raise HTTPException(status_code=404, detail="评分记录不存在")
 
-    # 验证分数范围
-    if request.score < 0 or request.score > 5:
+    record = db.query(InspectionRecord).filter(
+        InspectionRecord.record_id == result.record_id
+    ).first()
+    standard_type = record.task.standard_type if record and record.task else "diecheng"
+    is_lizhi = standard_type == "lizhi"
+
+    if not math.isfinite(request.score):
+        raise HTTPException(status_code=400, detail="分数必须是有效数字")
+
+    # 蝶城/非蝶城维持0-5分制；砺质按检查表中该项的max_score校验，
+    # 扣分模块（其他场所5S/BI及5S）只允许0或负分。
+    if is_lizhi:
+        from core import standards as _stds
+        module_cfg = _stds.get_module_cfg(standard_type, result.module_name)
+        if module_cfg.get("role") == "deduction":
+            if request.score > 0:
+                raise HTTPException(status_code=400, detail="砺质扣分项分数不能大于0")
+        else:
+            item_max_score = _get_item_max_score(
+                standard_type, result.module_name, result.item_id
+            )
+            if request.score < 0 or request.score > item_max_score:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"分数必须在0-{item_max_score:g}之间",
+                )
+    elif request.score < 0 or request.score > 5:
         raise HTTPException(status_code=400, detail="分数必须在0-5之间")
 
     old_score = float(result.score)
@@ -1155,7 +1051,7 @@ async def edit_score(
     if not result.is_edited:
         result.original_score = old_score
     result.score = request.score
-    result.weighted_score = request.score * float(result.weight)
+    result.weighted_score = request.score if is_lizhi else request.score * float(result.weight)
     result.is_edited = True
     result.is_fallback = False  # 人工修正后清除降级标记
     result.edited_by = current_user.id
@@ -1179,9 +1075,6 @@ async def edit_score(
                         "edit_reason": request.edit_reason})
 
     # 获取 task_id 并重算总分
-    record = db.query(InspectionRecord).filter(
-        InspectionRecord.record_id == result.record_id
-    ).first()
     if record:
         _compute_and_save_total_score(record.task_id)
         _invalidate_scoring_cache(record.task_id)
@@ -1328,6 +1221,117 @@ async def get_edit_analysis(
     }
 
 
+@router.post("/export/batch", summary="批量导出AI评分结果Excel")
+def export_scoring_excel_batch(
+    request: BatchScoringExportRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Export selected tasks or all tasks matching the current task-center filters."""
+    max_tasks = 500
+    max_details = 100_000
+    max_photos = 5_000
+    max_output_bytes = 200 * 1024 * 1024
+
+    query = apply_task_visibility(db.query(InspectionTask), current_user, db)
+
+    if request.scope == "selected":
+        requested_ids = list(dict.fromkeys(task_id for task_id in request.task_ids if task_id))
+        if not requested_ids:
+            raise HTTPException(status_code=400, detail="请至少选择一个任务")
+        if len(requested_ids) > max_tasks:
+            raise HTTPException(status_code=413, detail=f"单次最多导出{max_tasks}个任务，请缩小选择范围")
+        query = query.filter(InspectionTask.task_id.in_(requested_ids))
+        visible_tasks = query.all()
+        if len(visible_tasks) != len(requested_ids):
+            raise HTTPException(status_code=403, detail="部分任务不存在或无权导出")
+        order_map = {task_id: index for index, task_id in enumerate(requested_ids)}
+        candidate_tasks = sorted(visible_tasks, key=lambda task: order_map[task.task_id])
+    else:
+        if request.project_id is not None:
+            query = query.filter(InspectionTask.project_id == request.project_id)
+        if request.status is not None:
+            query = query.filter(InspectionTask.status == request.status)
+        candidate_count = query.count()
+        if candidate_count > max_tasks:
+            raise HTTPException(status_code=413, detail=f"当前筛选包含{candidate_count}个任务，单次最多导出{max_tasks}个，请缩小筛选范围")
+        candidate_tasks = query.order_by(InspectionTask.created_at.desc()).all()
+
+    if not candidate_tasks:
+        raise HTTPException(status_code=400, detail="当前范围内没有可导出的任务")
+
+    candidate_ids = [task.task_id for task in candidate_tasks]
+    scored_task_ids = {
+        row[0] for row in db.query(InspectionRecord.task_id).join(
+            ScoringResult, ScoringResult.record_id == InspectionRecord.record_id
+        ).filter(InspectionRecord.task_id.in_(candidate_ids)).distinct().all()
+    }
+    export_tasks = [task for task in candidate_tasks if task.task_id in scored_task_ids]
+    skipped_count = len(candidate_tasks) - len(export_tasks)
+    if not export_tasks:
+        raise HTTPException(status_code=400, detail="所选范围内暂无AI评分结果")
+
+    export_task_ids = [task.task_id for task in export_tasks]
+    detail_query = db.query(ScoringResult).join(
+        InspectionRecord, ScoringResult.record_id == InspectionRecord.record_id
+    ).filter(InspectionRecord.task_id.in_(export_task_ids))
+    detail_count = detail_query.count()
+    if detail_count > max_details:
+        raise HTTPException(status_code=413, detail=f"评分明细共{detail_count}条，单次最多导出{max_details}条，请缩小筛选范围")
+
+    records = db.query(InspectionRecord).filter(
+        InspectionRecord.task_id.in_(export_task_ids)
+    ).all()
+    results = detail_query.order_by(
+        InspectionRecord.task_id, ScoringResult.module_name, ScoringResult.id
+    ).all()
+    issues = db.query(Issue).join(
+        InspectionRecord, Issue.record_id == InspectionRecord.record_id
+    ).filter(InspectionRecord.task_id.in_(export_task_ids)).all()
+    photos = db.query(Photo).join(
+        Issue, Photo.issue_id == Issue.issue_id
+    ).join(
+        InspectionRecord, Issue.record_id == InspectionRecord.record_id
+    ).filter(InspectionRecord.task_id.in_(export_task_ids)).all()
+
+    if len(photos) > max_photos:
+        raise HTTPException(status_code=413, detail=f"问题照片共{len(photos)}张，单次最多导出{max_photos}张，请缩小筛选范围")
+
+    from core.scoring_export import build_batch_scoring_workbook
+
+    try:
+        temp_path = build_batch_scoring_workbook(export_tasks, records, results, issues, photos)
+        if os.path.getsize(temp_path) > max_output_bytes:
+            os.remove(temp_path)
+            raise HTTPException(status_code=413, detail="生成的Excel超过200MB，请缩小导出范围")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("批量导出评分Excel失败")
+        raise HTTPException(status_code=500, detail=f"批量导出失败：{str(exc)}")
+
+    def _remove_temp_file(path):
+        try:
+            if os.path.exists(path):
+                os.remove(path)
+        except OSError:
+            logger.warning("清理批量导出临时文件失败: %s", path)
+
+    background_tasks.add_task(_remove_temp_file, temp_path)
+    filename = f"AI评分批量汇总_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    return FileResponse(
+        temp_path,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename=filename,
+        headers={
+            "X-Exported-Count": str(len(export_tasks)),
+            "X-Skipped-Count": str(skipped_count),
+            "Access-Control-Expose-Headers": "Content-Disposition, X-Exported-Count, X-Skipped-Count",
+        },
+    )
+
+
 @router.get("/export/{task_id}", summary="导出评分结果Excel")
 async def export_scoring_excel(
     task_id: str,
@@ -1335,8 +1339,13 @@ async def export_scoring_excel(
     current_user: User = Depends(get_current_user)
 ):
     """导出评分结果为Excel文件"""
-    task = db.query(InspectionTask).filter(InspectionTask.task_id == task_id).first()
+    task = apply_task_visibility(db.query(InspectionTask), current_user, db).filter(
+        InspectionTask.task_id == task_id
+    ).first()
     if not task:
+        task_exists = db.query(InspectionTask.id).filter(InspectionTask.task_id == task_id).first()
+        if task_exists:
+            raise HTTPException(status_code=403, detail="无权导出此任务")
         raise HTTPException(status_code=404, detail="任务不存在")
 
     # 获取评分结果
@@ -1425,23 +1434,37 @@ async def export_scoring_excel(
         cell.alignment = center_align
         cell.border = thin_border
 
+    from core.scoring_aggregation import aggregate
+    from core import standards as _stds
+    standard_type = task.standard_type or "diecheng"
+    is_lizhi = (standard_type == "lizhi")
+    _agg_input = {
+        m: {
+            "raw_score_sum": sum(float(r.weighted_score) for r in rs),
+            "weight_sum": sum(float(r.weight) for r in rs),
+        }
+        for m, rs in modules_data.items()
+    }
+    _agg = aggregate(standard_type, _agg_input)
+
     row_idx = 4
-    for module_name, module_weight in settings.MODULE_WEIGHTS.items():
+    for module_name in _stds.get_modules(standard_type):
+        module_weight = _stds.get_module_cfg(standard_type, module_name).get("weight", 0)
         mod_results = modules_data.get(module_name, [])
         if not mod_results:
             continue
-        raw_sum = sum(float(r.weighted_score) for r in mod_results)
-        weight_sum = sum(float(r.weight) for r in mod_results)
-        max_score = 5 * weight_sum if weight_sum > 0 else 1
-        module_pct = (raw_sum / max_score * 100) if max_score > 0 else 0
+        module_pct = _agg["module_pct"].get(module_name, 0)
+        contribution = module_pct if is_lizhi else module_pct * module_weight
         full_count = sum(1 for r in mod_results if float(r.score) >= 5 and not r.is_skipped)
         deduct_count = sum(1 for r in mod_results if float(r.score) < 5 and not r.is_skipped)
 
         row_data = [
             module_name,
-            f"{module_weight * 100:.0f}%",
+            f"{module_weight * 100:.0f}%" if not is_lizhi else (
+                f"满分{_stds.get_module_cfg(standard_type, module_name).get('max_score', 0)}" if _stds.get_module_cfg(standard_type, module_name).get('role') != 'deduction' else "扣分项"
+            ),
             round(module_pct, 2),
-            round(module_pct * module_weight, 2),
+            round(contribution, 2),
             len(mod_results),
             full_count,
             deduct_count
@@ -1462,8 +1485,9 @@ async def export_scoring_excel(
         ws = wb.create_sheet(title=module_name[:31])
 
         # 表头
+        score_header = 'AI得分(按单项满分)' if is_lizhi else 'AI得分(0-5)'
         item_headers = ['检查项编号', '检查项名称', '检查标准', '检查方法', '评分规则', '权重',
-                        'AI得分(0-5)', '加权得分', '评分依据', '问题点', '问题照片']
+                        score_header, '加权得分', '评分依据', '问题点', '问题照片']
         for col, h in enumerate(item_headers, 1):
             cell = ws.cell(row=1, column=col, value=h)
             cell.font = header_font
@@ -1789,16 +1813,23 @@ async def get_global_review_queue(
     results = query.order_by(ScoringResult.scored_at.desc()).offset((page - 1) * page_size).limit(page_size).all()
 
     items = []
+    from core import standards as _stds
     for r in results:
         rec = r.record
         task = rec.task if rec else None
+        _std = task.standard_type if task else "diecheng"
+        _mcfg = _stds.get_module_cfg(_std, r.module_name)
         items.append({
             "scoring_id": r.scoring_id,
             "result_id": r.id,
             "task_id": task.task_id if task else "",
             "project_name": task.project.name if task and task.project else "",
             "check_date": task.check_date if task else "",
+            "standard_type": _std,
             "module_name": r.module_name,
+            "module_max_score": _mcfg.get("max_score"),
+            "module_role": _mcfg.get("role", "score"),
+            "item_max_score": _get_item_max_score(_std, r.module_name, r.item_id),
             "item_id": r.item_id,
             "item_name": r.item_name or "",
             "score": float(r.score or 0),

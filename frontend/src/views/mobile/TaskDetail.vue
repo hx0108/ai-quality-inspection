@@ -149,7 +149,7 @@
           </template>
           <template v-else-if="currentModule.scoring_status === 'scoring'">
             <div class="popup-score-main">
-              <van-loading size="18" color="#2563eb" style="margin-right: 8px;" />
+              <van-loading size="18" color="var(--blue)" style="margin-right: 8px;" />
               <span class="popup-score-label">AI 评分中...</span>
             </div>
           </template>
@@ -602,7 +602,7 @@ onUnmounted(() => {
 .info-card-bg {
   position: absolute;
   inset: 0;
-  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  background: linear-gradient(135deg, var(--blue), #0c7168);
 }
 
 .info-card-body {
@@ -671,9 +671,9 @@ onUnmounted(() => {
 }
 
 .module-card.module-pending { border-left: 4px solid #9ba3af; }
-.module-card.module-not_started { border-left: 4px solid #2563eb; }
-.module-card.module-in_progress { border-left: 4px solid #d97706; }
-.module-card.module-completed { border-left: 4px solid #059669; }
+.module-card.module-not_started { border-left: 4px solid var(--blue); }
+.module-card.module-in_progress { border-left: 4px solid var(--orange); }
+.module-card.module-completed { border-left: 4px solid var(--ok-strong); }
 
 .module-card-body {
   display: flex;
@@ -705,10 +705,10 @@ onUnmounted(() => {
   margin-right: 6px;
 }
 
-.module-score.score-excellent { color: #059669; }
-.module-score.score-good { color: #2563eb; }
-.module-score.score-normal { color: #d97706; }
-.module-score.score-poor { color: #dc2626; }
+.module-score.score-excellent { color: var(--ok-strong); }
+.module-score.score-good { color: var(--blue); }
+.module-score.score-normal { color: var(--orange); }
+.module-score.score-poor { color: var(--err); }
 
 .module-right {
   display: flex;
@@ -863,17 +863,17 @@ onUnmounted(() => {
 
 .pipeline-step.step-done .step-indicator {
   background: #dcfce7;
-  color: #16a34a;
+  color: var(--ok);
 }
 
 .pipeline-step.step-current .step-indicator {
   background: #dbeafe;
-  color: #2563eb;
+  color: var(--blue);
 }
 
 .pipeline-step.step-running .step-indicator {
   background: #fef3c7;
-  color: #d97706;
+  color: var(--orange);
   animation: pulse 1s infinite;
 }
 
@@ -912,7 +912,7 @@ onUnmounted(() => {
 }
 
 .pipeline-connector.active {
-  background: #16a34a;
+  background: var(--ok);
 }
 
 .pipeline-error {
@@ -920,7 +920,7 @@ onUnmounted(() => {
   padding: 10px 12px;
   background: #fef2f2;
   border-radius: 8px;
-  color: #dc2626;
+  color: var(--err);
   font-size: 13px;
   display: flex;
   align-items: center;

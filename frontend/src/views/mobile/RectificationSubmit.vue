@@ -72,7 +72,7 @@
       <!-- AI 核查结果 -->
       <div v-if="detail.ai_result" class="section">
         <div class="section-title">
-          <van-icon name="shield-o" color="#2563eb" style="margin-right: 4px" />
+          <van-icon name="shield-o" color="var(--blue)" style="margin-right: 4px" />
           AI 核查结果
         </div>
         <div class="ai-card">
@@ -85,7 +85,7 @@
             <div class="ai-score-bar">
               <van-progress :percentage="detail.ai_result.confidence_score || 0"
                 :stroke-width="8" :show-pivot="true"
-                :color="(detail.ai_result.confidence_score || 0) >= 70 ? '#059669' : '#d97706'" />
+                :color="(detail.ai_result.confidence_score || 0) >= 70 ? 'var(--ok-strong)' : 'var(--orange)'" />
             </div>
           </div>
           <div v-if="detail.ai_result.watermark_valid !== undefined" class="ai-row">
@@ -421,7 +421,12 @@ onUnmounted(() => {
 
 .info-card {
   font-size: 13px;
-  color: #5c6477;
+  color: var(--ink-600);
+  background: var(--bg-card);
+  border: 1px solid var(--ink-200);
+  border-left: 3px solid var(--err);
+  border-radius: 12px;
+  padding: 13px 14px;
 }
 
 .info-row {
@@ -519,12 +524,12 @@ onUnmounted(() => {
 
 .ai-pass {
   background: #ecfdf5;
-  color: #059669;
+  color: var(--ok-strong);
 }
 
 .ai-fail {
   background: #fef2f2;
-  color: #dc2626;
+  color: var(--err);
 }
 
 .ai-row {

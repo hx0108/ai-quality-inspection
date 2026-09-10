@@ -29,13 +29,23 @@
             <span class="card-t">各项目模块得分对比</span>
             <span class="card-d">最新一次检查 · 点击行查看详情</span>
           </div>
-          <div style="display:flex;gap:6px">
-            <button class="btn btn-sm" @click="exportScoreTable('excel')">
-              <svg viewBox="0 0 16 16"><path d="M2 3v10h12M8 7v6M5 10l3 3 3-3M2 3l3 3" /></svg>导出Excel
-            </button>
-            <button class="btn btn-sm" @click="exportScoreTable('csv')">
-              <svg viewBox="0 0 16 16"><path d="M2 3v10h12M8 7v6M5 10l3 3 3-3M2 3l3 3" /></svg>导出CSV
-            </button>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="legend" style="font-size:11px">
+              <span><i style="background:#edf6f0;border:1px solid var(--ok-border)" />≥90</span>
+              <span><i style="background:#faf5e9;border:1px solid var(--warn-border)" />70–89</span>
+              <span><i style="background:var(--err-bg);border:1px solid var(--err-border)" />&lt;70</span>
+            </span>
+            <el-dropdown @command="exportScoreTable">
+              <button class="btn btn-sm">
+                <svg viewBox="0 0 16 16"><path d="M2 3v10h12M8 7v6M5 10l3 3 3-3M2 3l3 3" /></svg>导出<svg viewBox="0 0 16 16" style="width:10px;height:10px;margin-left:2px"><path d="M4 6l4 4 4-4" /></svg>
+              </button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="excel">导出 Excel</el-dropdown-item>
+                  <el-dropdown-item command="csv">导出 CSV</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </div>
         </div>
         <div class="module-table-wrap">
@@ -62,31 +72,46 @@
         <div class="card">
           <div class="card-h">
             <span class="card-t">问题按模块分布</span>
-            <div style="display:flex;gap:6px">
-              <button class="btn btn-sm" @click="exportChart('module', 'png')">
-                <svg viewBox="0 0 16 16"><path d="M2 3v10h12M8 7v6M5 10l3 3 3-3" /></svg>导出图片
+            <el-dropdown @command="(cmd) => exportChart('module', cmd)">
+              <button class="btn btn-sm">
+                <svg viewBox="0 0 16 16"><path d="M2 3v10h12M8 7v6M5 10l3 3 3-3M2 3l3 3" /></svg>导出<svg viewBox="0 0 16 16" style="width:10px;height:10px;margin-left:2px"><path d="M4 6l4 4 4-4" /></svg>
               </button>
-              <button class="btn btn-sm" @click="exportChart('module', 'excel')">
-                <svg viewBox="0 0 16 16"><path d="M2 3v10h12M8 7v6M5 10l3 3 3-3M2 3l3 3" /></svg>导出Excel
-              </button>
-            </div>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="png">导出图片</el-dropdown-item>
+                  <el-dropdown-item command="excel">导出 Excel</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </div>
           <div ref="moduleChartRef" class="chart-area"></div>
         </div>
         <div class="card">
           <div class="card-h">
             <span class="card-t">各项目整改完成率</span>
-            <div style="display:flex;gap:6px">
-              <button class="btn btn-sm" @click="exportChart('rect', 'png')">
-                <svg viewBox="0 0 16 16"><path d="M2 3v10h12M8 7v6M5 10l3 3 3-3" /></svg>导出图片
+            <el-dropdown @command="(cmd) => exportChart('rect', cmd)">
+              <button class="btn btn-sm">
+                <svg viewBox="0 0 16 16"><path d="M2 3v10h12M8 7v6M5 10l3 3 3-3M2 3l3 3" /></svg>导出<svg viewBox="0 0 16 16" style="width:10px;height:10px;margin-left:2px"><path d="M4 6l4 4 4-4" /></svg>
               </button>
-              <button class="btn btn-sm" @click="exportChart('rect', 'excel')">
-                <svg viewBox="0 0 16 16"><path d="M2 3v10h12M8 7v6M5 10l3 3 3-3M2 3l3 3" /></svg>导出Excel
-              </button>
-            </div>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="png">导出图片</el-dropdown-item>
+                  <el-dropdown-item command="excel">导出 Excel</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </div>
           <div ref="rectChartRef" class="chart-area"></div>
         </div>
+      </div>
+
+      <!-- 检查得分趋势（原型：平均分趋势卡） -->
+      <div class="card" style="margin-top:var(--gap-blk)">
+        <div class="card-h">
+          <span class="card-t">检查得分趋势</span>
+          <span class="card-d">最近 {{ trendTasks.length }} 次已评分检查</span>
+        </div>
+        <div ref="trendChartRef" class="chart-area trend-area"></div>
       </div>
     </template>
 
@@ -135,13 +160,14 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { getDashboardStats } from '../../api/stats'
 import { getTasks, getProjects } from '../../api/tasks'
 import { getAllRectifications } from '../../api/rectification'
 import { getScoringSummary } from '../../api/scoring'
 import echarts from '../../utils/echarts'
+import { RAMP, SEMANTIC, AXIS, TOOLTIP } from '../../utils/chartTheme'
 import * as XLSX from 'xlsx'
 import { saveAs } from 'file-saver'
 import StatsCards from './dashboard/StatsCards.vue'
@@ -162,19 +188,35 @@ const allProjects = ref([])
 const exportingAll = ref(false)
 const coverageDetail = ref({ checked_projects: [], unchecked_projects: [] })
 
-// 8大模块名称（与后端 config.py MODULE_WEIGHTS 对应）
-const moduleNames = [
-  { key: '客户服务', label: '客户服务' },
-  { key: '安全管理', label: '安全管理' },
-  { key: 'EHS及风险管理', label: 'EHS' },
-  { key: '环境管理', label: '环境管理' },
-  { key: '机电运维', label: '机电运维' },
-  { key: '设施维护', label: '设施维护' },
-  { key: '综合管理', label: '综合管理' },
-  { key: '财务管理', label: '财务管理' },
-]
+// 模块列：从当前展示项目的实际模块动态聚合（兼容蝶城/非蝶城/砺质），无数据时回退蝶城默认
+const MODULE_SHORT_LABEL = {
+  '客户服务': '客户服务', '安全管理': '安全管理', 'EHS及风险管理': 'EHS', '环境管理': '环境管理',
+  '机电运维': '机电运维', '设施维护': '设施维护', '综合管理': '综合管理', '财务管理': '财务管理',
+  '管家响应加速度': '管家响应', '安防楼道净通行': '安防楼道', '环境桶净无漏溢': '环境桶净',
+  '技术乘梯稳安心': '技术乘梯', 'BI及5S': 'BI及5S',
+  '管家礼韵塑新颜': '管家礼韵', '安防礼韵塑新颜': '安防礼韵', '环境礼韵塑新颜': '环境礼韵',
+  '技术礼韵塑新颜': '技术礼韵', '其他场所5S': '其他5S'
+}
+const _DC_FALLBACK = ['客户服务', '安全管理', 'EHS及风险管理', '环境管理', '机电运维', '设施维护', '综合管理', '财务管理']
+const moduleNames = computed(() => {
+  const seen = new Map()
+  for (const p of projectScores.value || []) {
+    if (p.modules) {
+      for (const k of Object.keys(p.modules)) {
+        if (!seen.has(k)) seen.set(k, { key: k, label: MODULE_SHORT_LABEL[k] || k })
+      }
+    }
+  }
+  if (!seen.size) {
+    for (const k of _DC_FALLBACK) seen.set(k, { key: k, label: MODULE_SHORT_LABEL[k] || k })
+  }
+  return [...seen.values()]
+})
 
 const moduleChartRef = ref(null)
+const trendChartRef = ref(null)
+let trendChart = null
+const trendTasks = ref([])
 let moduleChart = null
 
 const rectChartRef = ref(null)
@@ -226,11 +268,11 @@ function downloadChartImage(chartInstance, fileName) {
 
 // ==================== 导出：模块得分对比表 ====================
 const exportScoreTable = (format) => {
-  const headers = ['项目名称', ...moduleNames.map(m => m.label), '总分']
+  const headers = ['项目名称', ...moduleNames.value.map(m => m.label), '总分']
   const rows = projectScores.value.map(p => {
     return [
       p.project_name,
-      ...moduleNames.map(m => p.modules?.[m.key] ?? '-'),
+      ...moduleNames.value.map(m => p.modules?.[m.key] ?? '-'),
       p.latest_score ?? '-'
     ]
   })
@@ -342,9 +384,9 @@ const exportAllData = async () => {
 
     // Sheet 2: 项目模块得分对比
     if (projectScores.value.length) {
-      const scoreHeaders = ['项目名称', ...moduleNames.map(m => m.label), '总分']
+      const scoreHeaders = ['项目名称', ...moduleNames.value.map(m => m.label), '总分']
       const scoreRows = projectScores.value.map(p => [
-        p.project_name, ...moduleNames.map(m => p.modules?.[m.key] ?? '-'), p.latest_score ?? '-'
+        p.project_name, ...moduleNames.value.map(m => p.modules?.[m.key] ?? '-'), p.latest_score ?? '-'
       ])
       const ws2 = XLSX.utils.aoa_to_sheet(buildSheet(scoreHeaders, scoreRows))
       ws2['!cols'] = scoreHeaders.map(() => ({ wch: 14 }))
@@ -405,9 +447,64 @@ const fetchStats = async () => {
   } finally {
     loading.value = false
   }
+
+  // 趋势数据：最近 12 次有评分的检查（按检查日排序）
+  try {
+    const tRes = await getTasks({ page: 1, page_size: 60 })
+    trendTasks.value = (tRes.items || [])
+      .filter(t => t.total_score != null && t.total_score > 0 && t.check_date)
+      .sort((a, b) => (a.check_date || '').localeCompare(b.check_date || ''))
+      .slice(-12)
+  } catch (e) { /* ignore */ }
+
   await nextTick()
   renderModuleChart()
   renderRectChart()
+  renderTrendChart()
+}
+
+// ==================== 趋势折线（原型：平均分趋势卡） ====================
+const renderTrendChart = () => {
+  if (!trendChartRef.value || !trendTasks.value.length) return
+  if (!trendChart) {
+    trendChart = echarts.init(trendChartRef.value)
+  }
+  const data = trendTasks.value
+  trendChart.setOption({
+    tooltip: { trigger: 'axis', ...TOOLTIP },
+    grid: { left: 45, right: 20, top: 15, bottom: 28 },
+    xAxis: {
+      type: 'category',
+      data: data.map(t => (t.check_date || '').slice(5)),
+      axisLine: { show: false },
+      axisTick: { show: false },
+      axisLabel: { fontSize: 11, color: AXIS.axisLabel }
+    },
+    yAxis: {
+      type: 'value',
+      min: 50,
+      max: 100,
+      axisLine: { show: false },
+      axisTick: { show: false },
+      splitLine: { lineStyle: { color: AXIS.splitLine } },
+      axisLabel: { fontSize: 11, color: AXIS.axisLabel }
+    },
+    series: [{
+      type: 'line',
+      data: data.map(t => t.total_score),
+      smooth: 0.35,
+      symbol: 'circle',
+      symbolSize: 5,
+      lineStyle: { width: 2, color: '#0f8a80' },
+      itemStyle: { color: '#0f8a80', borderWidth: 2, borderColor: '#fff' },
+      areaStyle: {
+        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+          { offset: 0, color: 'rgba(15, 138, 128, 0.14)' },
+          { offset: 1, color: 'rgba(15, 138, 128, 0.01)' }
+        ])
+      }
+    }]
+  })
 }
 
 const renderModuleChart = () => {
@@ -421,48 +518,41 @@ const renderModuleChart = () => {
       }
     })
   }
-  const colors = ['#6366F1', '#8B5CF6', '#EC4899', '#F43F5E', '#F97316', '#EAB308', '#22C55E', '#06B6D4']
   const reversed = [...issueByModule.value].reverse()
   moduleChart.setOption({
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'shadow' },
-      backgroundColor: 'rgba(255, 255, 255, 0.96)',
-      borderColor: '#E2E8F0',
-      borderWidth: 1,
-      textStyle: { color: '#18181b', fontSize: 13 },
-      extraCssText: 'box-shadow: 0 4px 12px rgba(0,0,0,0.08); border-radius: 8px;'
+      ...TOOLTIP
     },
-    grid: { left: 110, right: 20, top: 10, bottom: 20 },
+    grid: { left: 110, right: 40, top: 8, bottom: 8 },
     xAxis: {
       type: 'value',
       axisLine: { show: false },
       axisTick: { show: false },
-      splitLine: { lineStyle: { color: '#f4f4f5', type: 'dashed' } },
-      axisLabel: { color: '#94A3B8' }
+      splitLine: { show: false },
+      axisLabel: { show: false }
     },
     yAxis: {
       type: 'category',
       data: reversed.map(i => i.module_name),
       axisLine: { show: false },
       axisTick: { show: false },
-      axisLabel: { fontSize: 12, color: '#52525b', width: 90, overflow: 'truncate' }
+      axisLabel: { fontSize: 12, color: '#474753', width: 90, overflow: 'truncate' }
     },
     series: [{
       type: 'bar',
       data: reversed.map((i, idx) => ({
         value: i.count,
         itemStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
-            { offset: 0, color: colors[idx % colors.length] },
-            { offset: 1, color: colors[idx % colors.length] + 'B3' }
-          ]),
-          borderRadius: [0, 6, 6, 0]
+          color: RAMP[idx % RAMP.length],
+          borderRadius: [0, 4, 4, 0]
         }
       })),
-      barWidth: 20,
+      barWidth: 18,
+      label: { show: true, position: 'right', fontSize: 12, fontWeight: 600, color: '#61616d' },
       emphasis: {
-        itemStyle: { shadowBlur: 6, shadowColor: 'rgba(0,0,0,0.1)' }
+        itemStyle: { shadowBlur: 6, shadowColor: 'rgba(22,22,28,0.1)' }
       }
     }]
   })
@@ -478,11 +568,7 @@ const renderRectChart = () => {
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'shadow' },
-      backgroundColor: 'rgba(255, 255, 255, 0.96)',
-      borderColor: '#E2E8F0',
-      borderWidth: 1,
-      textStyle: { color: '#18181b', fontSize: 13 },
-      extraCssText: 'box-shadow: 0 4px 12px rgba(0,0,0,0.08); border-radius: 8px;',
+      ...TOOLTIP,
       formatter: (params) => {
         const name = params[0].name
         const approved = params.find(p => p.seriesName === '已整改')?.value || 0
@@ -490,8 +576,8 @@ const renderRectChart = () => {
         const total = approved + pending
         const rate = total > 0 ? ((approved / total) * 100).toFixed(1) : 0
         return `<div style="font-weight:600;margin-bottom:4px">${name}</div>` +
-          `<div>已整改：<span style="color:#16a34a;font-weight:600">${approved}</span></div>` +
-          `<div>未整改：<span style="color:#dc2626;font-weight:600">${pending}</span></div>` +
+          `<div>已整改：<span style="color:${SEMANTIC.ok};font-weight:600">${approved}</span></div>` +
+          `<div>未整改：<span style="color:#61616d;font-weight:600">${pending}</span></div>` +
           `<div style="margin-top:4px;border-top:1px solid #eee;padding-top:4px">完成率：<b>${rate}%</b></div>`
       }
     },
@@ -499,25 +585,26 @@ const renderRectChart = () => {
       data: ['已整改', '未整改'],
       top: 0,
       right: 10,
-      textStyle: { fontSize: 12, color: '#52525b' },
+      textStyle: { fontSize: 12, color: '#474753' },
       itemWidth: 12,
       itemHeight: 12,
       itemGap: 16
     },
-    grid: { left: 110, right: 50, top: 35, bottom: 15 },
+    grid: { left: 110, right: 46, top: 30, bottom: 8 },
     xAxis: {
       type: 'value',
+      max: Math.max(...data.map(i => (i.approved || 0) + (i.pending || 0)), 1) * 1.14,
       axisLine: { show: false },
       axisTick: { show: false },
-      splitLine: { lineStyle: { color: '#f4f4f5', type: 'dashed' } },
-      axisLabel: { color: '#94A3B8' }
+      splitLine: { show: false },
+      axisLabel: { show: false }
     },
     yAxis: {
       type: 'category',
       data: data.map(i => i.project_name),
       axisLine: { show: false },
       axisTick: { show: false },
-      axisLabel: { fontSize: 12, color: '#52525b', width: 90, overflow: 'truncate' }
+      axisLabel: { fontSize: 12, color: '#474753', width: 90, overflow: 'truncate' }
     },
     series: [
       {
@@ -526,14 +613,11 @@ const renderRectChart = () => {
         stack: 'total',
         data: data.map(i => i.approved),
         itemStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
-            { offset: 0, color: '#16a34a' },
-            { offset: 1, color: '#34D399' }
-          ]),
+          color: SEMANTIC.ok,
           borderRadius: [0, 0, 0, 0]
         },
         barWidth: 18,
-        emphasis: { itemStyle: { shadowBlur: 6, shadowColor: 'rgba(5,150,105,0.2)' } }
+        emphasis: { itemStyle: { shadowBlur: 6, shadowColor: 'rgba(39,148,91,0.2)' } }
       },
       {
         name: '未整改',
@@ -541,14 +625,32 @@ const renderRectChart = () => {
         stack: 'total',
         data: data.map(i => i.pending),
         itemStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
-            { offset: 0, color: '#F87171' },
-            { offset: 1, color: '#FCA5A5' }
-          ]),
-          borderRadius: [0, 6, 6, 0]
+          color: SEMANTIC.neutral,
+          borderRadius: [0, 4, 4, 0]
         },
         barWidth: 18,
-        emphasis: { itemStyle: { shadowBlur: 6, shadowColor: 'rgba(220,38,38,0.2)' } }
+        emphasis: { itemStyle: { shadowBlur: 6, shadowColor: 'rgba(22,22,28,0.15)' } }
+      },
+      {
+        name: '完成率',
+        type: 'scatter',
+        symbolSize: 0,
+        silent: true,
+        data: data.map(i => {
+          const total = (i.approved || 0) + (i.pending || 0)
+          return {
+            value: [total, i.project_name],
+            rate: total > 0 ? Math.round(((i.approved || 0) / total) * 100) : 0
+          }
+        }),
+        label: {
+          show: true,
+          position: 'right',
+          fontSize: 12,
+          fontWeight: 600,
+          color: '#61616d',
+          formatter: p => p.data.rate + '%'
+        }
       }
     ]
   })
@@ -706,26 +808,23 @@ const renderMiniChart = (tasks) => {
   miniChart.setOption({
     tooltip: {
       trigger: 'axis',
-      backgroundColor: 'rgba(255, 255, 255, 0.96)',
-      borderColor: '#E2E8F0',
-      borderWidth: 1,
-      textStyle: { color: '#18181b', fontSize: 12 }
+      ...TOOLTIP
     },
     grid: { left: 45, right: 15, top: 10, bottom: 25 },
     xAxis: {
       type: 'category',
       data: sorted.map(t => t.check_date || ''),
-      axisLine: { lineStyle: { color: '#E2E8F0' } },
+      axisLine: { lineStyle: { color: AXIS.axisLine } },
       axisTick: { show: false },
-      axisLabel: { fontSize: 10, rotate: 30, color: '#94A3B8' }
+      axisLabel: { fontSize: 10, rotate: 30, color: AXIS.axisLabel }
     },
     yAxis: {
       type: 'value',
       min: 0, max: 100,
-      splitLine: { lineStyle: { color: '#f4f4f5', type: 'dashed' } },
+      splitLine: { lineStyle: { color: AXIS.splitLine, type: 'dashed' } },
       axisLine: { show: false },
       axisTick: { show: false },
-      axisLabel: { fontSize: 10, color: '#94A3B8' }
+      axisLabel: { fontSize: 10, color: AXIS.axisLabel }
     },
     series: [{
       type: 'line',
@@ -733,18 +832,12 @@ const renderMiniChart = (tasks) => {
       smooth: 0.4,
       symbol: 'circle',
       symbolSize: 6,
-      lineStyle: {
-        width: 2,
-        color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
-          { offset: 0, color: '#16a34a' },
-          { offset: 1, color: '#34D399' }
-        ])
-      },
-      itemStyle: { color: '#16a34a', borderWidth: 2, borderColor: '#fff' },
+      lineStyle: { width: 2, color: '#0f8a80' },
+      itemStyle: { color: '#0f8a80', borderWidth: 2, borderColor: '#fff' },
       areaStyle: {
         color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-          { offset: 0, color: 'rgba(5, 150, 105, 0.15)' },
-          { offset: 1, color: 'rgba(5, 150, 105, 0.01)' }
+          { offset: 0, color: 'rgba(15, 138, 128, 0.15)' },
+          { offset: 1, color: 'rgba(15, 138, 128, 0.01)' }
         ])
       }
     }]
@@ -752,6 +845,7 @@ const renderMiniChart = (tasks) => {
 }
 
 const handleResize = () => {
+  trendChart?.resize()
   moduleChart?.resize()
   rectChart?.resize()
   miniChart?.resize()
@@ -809,44 +903,6 @@ onUnmounted(() => {
 }
 
 /* ==================== Button (prototype .btn) ==================== */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  border-radius: var(--r);
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.12s var(--ease);
-  border: 1px solid var(--ink-100);
-  background: var(--bg-card);
-  color: var(--ink-800);
-  font-family: var(--sans);
-}
-
-.btn:hover {
-  background: var(--bg-muted);
-  border-color: var(--ink-200);
-}
-
-.btn svg {
-  width: 14px;
-  height: 14px;
-  stroke: currentColor;
-  fill: none;
-  stroke-width: 1.8;
-}
-
-.btn-sm {
-  padding: 5px 10px;
-  font-size: 12px;
-}
-
-.btn-sm svg {
-  width: 12px;
-  height: 12px;
-}
 
 /* ==================== Card (prototype .card) ==================== */
 .card {
@@ -905,6 +961,10 @@ onUnmounted(() => {
 .chart-area {
   height: 300px;
   padding: 8px;
+}
+
+.trend-area {
+  height: 210px;
 }
 
 /* ==================== Module table ==================== */
@@ -967,7 +1027,7 @@ onUnmounted(() => {
 .coverage-summary {
   flex: 1;
   background: var(--blue-bg);
-  border: 1px solid #bae6fd;
+  border: 1px solid var(--brand-border);
   border-radius: 10px;
   padding: 14px 18px;
   font-size: 14px;
@@ -1065,8 +1125,8 @@ onUnmounted(() => {
 
 .mini-chart-box {
   height: 180px;
-  background: #fff;
-  border: 1px solid #f0f0f0;
+  background: var(--bg-card);
+  border: 1px solid var(--ink-100);
   border-radius: 10px;
 }
 

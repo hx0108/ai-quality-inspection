@@ -32,43 +32,85 @@ onUnmounted(() => {
 </script>
 
 <style>
-/* ===== 设计系统变量 ===== */
+/* ===== 设计系统变量 v2（现代工具感 · 青绿品牌色）
+     令牌值与 designs/qc-ui-redesign/qc-theme.css 对齐；变量名保持向后兼容 ===== */
 :root {
-  --bg: #fafaf8;
+  /* 中性（冷灰） */
+  --bg: #f7f7f8;
   --bg-card: #fff;
-  --bg-hover: #f3f2ef;
-  --bg-muted: #f5f4f1;
-  --ink-900: #18181b;
-  --ink-800: #27272a;
-  --ink-600: #52525b;
-  --ink-400: #a1a1aa;
-  --ink-300: #d4d4d8;
-  --ink-200: #e4e4e7;
-  --ink-100: #f4f4f5;
-  --teal-700: #0f766e;
-  --teal-600: #0d9488;
-  --teal-500: #14b8a6;
-  --teal-400: #2dd4bf;
-  --teal-100: #ccfbf1;
-  --teal-50: #f0fdfa;
-  --orange: #ea580c;
-  --orange-hover: #c2410c;
-  --orange-light: #fff7ed;
-  --ok: #16a34a;
-  --ok-bg: #dcfce7;
-  --warn: #ca8a04;
-  --warn-bg: #fef9c3;
-  --err: #dc2626;
-  --err-bg: #fee2e2;
-  --blue: #2563eb;
-  --blue-bg: #eff6ff;
-  --amber: #d97706;
-  --sans: 'Plus Jakarta Sans', -apple-system, 'PingFang SC', 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
-  --mono: 'JetBrains Mono', ui-monospace, 'Cascadia Code', monospace;
-  --r: 6px;
-  --r-sm: 4px;
+  --bg-hover: #ececf0;
+  --bg-muted: #f2f2f4;
+  --ink-900: #191922;
+  --ink-800: #2c2c38;
+  --ink-700: #474753;
+  --ink-600: #61616d;
+  --ink-500: #84848f;
+  --ink-400: #a4a4af;
+  --ink-300: #c9c9d1;
+  --ink-200: #e4e4e9;
+  --ink-100: #f0f0f3;
+  /* 深色侧栏 */
+  --side-bg: #16161c;
+  --side-hover: #1e1e26;
+  --side-border: #24242d;
+  --side-text: #8e8e9a;
+  --side-text-strong: #f0f0f4;
+  --side-active-bg: rgba(15, 138, 128, 0.16);
+  --side-active-line: #2bb8aa;
+  /* 品牌（青绿）—— --blue 为历史名，全部指向品牌色 */
+  --blue: #0f8a80;
+  --blue-hover: #14a094;
+  --blue-active: #0c7168;
+  --blue-bg: #e7f5f3;
+  --brand-border: #b5e0da;
+  --brand-ink: #0a6b62;
+  /* 兼容旧 teal 系列 */
+  --teal-700: #0a6b62;
+  --teal-600: #0f8a80;
+  --teal-500: #14a094;
+  --teal-400: #3fb3a7;
+  --teal-100: #d3ede9;
+  --teal-50: #eef8f6;
+  /* 语义色（好=绿 警示=琥珀 严重=红） */
+  --ok: #27945b;
+  --ok-strong: #1e7d4c;
+  --ok-bg: #e5f4ec;
+  --warn: #b07a12;
+  --warn-strong: #93650d;
+  --warn-bg: #faf1dd;
+  --err: #e5484d;
+  --err-strong: #c53a3f;
+  --err-bg: #fdecec;
+  --orange: #d97706;
+  --orange-hover: #b45309;
+  --orange-light: #fdf3e3;
+  --amber: #b07a12;
+  /* 图表 */
+  --chart-1: #0f8a80;
+  --chart-2: #35a398;
+  --chart-3: #6fbcb2;
+  --chart-4: #a5d8d0;
+  --chart-grid: #ececf0;
+  --chart-axis: #a4a4af;
+  --chart-bar-track: #f0f0f3;
+  --chart-ramp-1: #0a6b62;
+  --chart-ramp-2: #0f8a80;
+  --chart-ramp-3: #35a398;
+  --chart-ramp-4: #6fbcb2;
+  --chart-ramp-5: #a5d8d0;
+  /* 字体（系统栈，无 CDN） */
+  --sans: -apple-system, 'SF Pro Text', 'PingFang SC', 'HarmonyOS Sans SC', 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+  --mono: ui-monospace, 'Cascadia Code', 'SF Mono', Consolas, monospace;
+  /* 几何 */
+  --r: 8px;
+  --r-sm: 6px;
   --r-lg: 10px;
   --ease: cubic-bezier(.25,.1,.25,1);
+  --gap-blk: 14px;
+  /* 浮层阴影 / 焦点 */
+  --shadow-pop: 0 4px 16px rgba(22,22,28,.10), 0 1px 3px rgba(22,22,28,.06);
+  --shadow-overlay: 0 12px 32px rgba(22,22,28,.16), 0 2px 6px rgba(22,22,28,.08);
+  --focus-ring: 0 0 0 3px rgba(15,138,128,.28);
 }
 
 * {
@@ -81,6 +123,7 @@ body {
   font-family: var(--sans);
   background-color: var(--bg);
   color: var(--ink-800);
+  font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-tap-highlight-color: transparent;
@@ -119,31 +162,31 @@ body {
 .el-button--primary {
   --el-button-bg-color: var(--blue);
   --el-button-border-color: var(--blue);
-  --el-button-hover-bg-color: #1d4ed8;
-  --el-button-hover-border-color: #1d4ed8;
-  --el-button-active-bg-color: #1e40af;
-  --el-button-active-border-color: #1e40af;
+  --el-button-hover-bg-color: var(--blue-hover);
+  --el-button-hover-border-color: var(--blue-hover);
+  --el-button-active-bg-color: var(--blue-active);
+  --el-button-active-border-color: var(--blue-active);
 }
 
 .el-button--success {
   --el-button-bg-color: var(--ok);
   --el-button-border-color: var(--ok);
-  --el-button-hover-bg-color: #15803d;
-  --el-button-hover-border-color: #15803d;
+  --el-button-hover-bg-color: var(--ok-strong);
+  --el-button-hover-border-color: var(--ok-strong);
 }
 
 .el-button--danger {
   --el-button-bg-color: var(--err);
   --el-button-border-color: var(--err);
-  --el-button-hover-bg-color: #b91c1c;
-  --el-button-hover-border-color: #b91c1c;
+  --el-button-hover-bg-color: var(--err-strong);
+  --el-button-hover-border-color: var(--err-strong);
 }
 
 .el-button--warning {
   --el-button-bg-color: var(--warn);
   --el-button-border-color: var(--warn);
-  --el-button-hover-bg-color: #a16207;
-  --el-button-hover-border-color: #a16207;
+  --el-button-hover-bg-color: var(--warn-strong);
+  --el-button-hover-border-color: var(--warn-strong);
 }
 
 /* Tag */
@@ -155,20 +198,20 @@ body {
 
 .el-tag--success {
   --el-tag-bg-color: var(--ok-bg);
-  --el-tag-border-color: #bbf7d0;
-  --el-tag-text-color: var(--ok);
+  --el-tag-border-color: #b9e2cc;
+  --el-tag-text-color: var(--ok-strong);
 }
 
 .el-tag--warning {
   --el-tag-bg-color: var(--warn-bg);
-  --el-tag-border-color: #fde68a;
-  --el-tag-text-color: var(--warn);
+  --el-tag-border-color: #ecd9a8;
+  --el-tag-text-color: var(--warn-strong);
 }
 
 .el-tag--danger {
   --el-tag-bg-color: var(--err-bg);
-  --el-tag-border-color: #fecaca;
-  --el-tag-text-color: var(--err);
+  --el-tag-border-color: #f6c6c8;
+  --el-tag-text-color: var(--err-strong);
 }
 
 .el-tag--dark.el-tag--info {
@@ -222,7 +265,7 @@ body {
 }
 
 .el-input__wrapper.is-focus {
-  box-shadow: 0 0 0 1px var(--blue) inset, 0 0 0 3px rgba(37, 99, 235, 0.1) inset !important;
+  box-shadow: 0 0 0 1px var(--blue) inset, 0 0 0 3px rgba(15, 138, 128, 0.12) inset !important;
 }
 
 .el-input__inner {
@@ -390,19 +433,7 @@ body > div:empty:not([data-v-app]) {
   background-color: rgba(0, 0, 0, 0.7) !important;
 }
 
-/* ===== Vant 主题变量（移动端） ===== */
-:root {
-  --van-primary-color: var(--blue);
-  --van-success-color: var(--ok);
-  --van-warning-color: var(--warn);
-  --van-danger-color: var(--err);
-  --van-text-color: var(--ink-800);
-  --van-text-color-2: var(--ink-600);
-  --van-text-color-3: var(--ink-400);
-  --van-border-color: var(--ink-200);
-  --van-background: var(--bg);
-  --van-background-2: var(--bg-card);
-}
+/* ===== Vant 主题变量已迁移至 design-upgrade.css（保证加载顺序在 vant/lib/index.css 之后） ===== */
 
 /* ===== 移动端底部导航栏固定 ===== */
 .van-tabbar--fixed {
@@ -411,5 +442,39 @@ body > div:empty:not([data-v-app]) {
   left: 0 !important;
   width: 100% !important;
   z-index: 100 !important;
+}
+
+/* ===== 桌面宽屏下：移动路由收进居中手机栏（router.afterEach 标记 body.mobile-route） ===== */
+@media (min-width: 768px) {
+  body.mobile-route {
+    background: var(--bg-muted);
+  }
+  body.mobile-route #app {
+    max-width: 480px;
+    min-height: 100vh;
+    margin: 0 auto;
+    background: var(--bg);
+    box-shadow: 0 0 0 1px var(--ink-200), 0 16px 48px rgba(22, 22, 28, 0.10);
+  }
+  /* 固定定位的元素相对视口，需同步收窄并居中 */
+  body.mobile-route .van-tabbar--fixed,
+  body.mobile-route .van-nav-bar--fixed {
+    left: 50% !important;
+    transform: translateX(-50%);
+    max-width: 480px !important;
+  }
+  /* 底部弹层/动作面板同样收进手机栏，避免桌面端全宽 */
+  body.mobile-route .van-popup.van-popup--bottom,
+  body.mobile-route .van-action-sheet {
+    left: 50% !important;
+    transform: translateX(-50%);
+    width: 100%;
+    max-width: 480px !important;
+  }
+  body.mobile-route .van-toast {
+    left: 50% !important;
+    transform: translateX(-50%);
+    max-width: 320px;
+  }
 }
 </style>

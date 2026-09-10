@@ -93,7 +93,8 @@ async def collect_reports(state: dict) -> dict:
                     "project_name": project.name if project else content.get("project_name", "未知"),
                     "report_id": report.report_id,
                     "check_date": content.get("check_date", ""),
-                    "total_score": float(report.total_score or 0)
+                    "total_score": float(report.total_score or 0),
+                    "standard_type": report.task.standard_type if report.task else "diecheng"
                 })
 
             label_a = f"{projects_info[0]['project_name']} ({projects_info[0]['check_date']})"
@@ -122,7 +123,8 @@ async def collect_reports(state: dict) -> dict:
                         "project_name": project.name,
                         "report_id": report.report_id,
                         "check_date": content.get("check_date", ""),
-                        "total_score": float(report.total_score or 0)
+                        "total_score": float(report.total_score or 0),
+                        "standard_type": report.task.standard_type if report.task else "diecheng"
                     })
             else:
                 # 按时间范围取最新
@@ -144,7 +146,8 @@ async def collect_reports(state: dict) -> dict:
                         "project_name": project.name,
                         "report_id": report.report_id,
                         "check_date": content.get("check_date", ""),
-                        "total_score": float(report.total_score or 0)
+                        "total_score": float(report.total_score or 0),
+                        "standard_type": report.task.standard_type if report.task else "diecheng"
                     })
 
             label_a = f"{projects_info[0]['project_name']} T1 ({projects_info[0]['check_date']})"
@@ -179,7 +182,8 @@ async def collect_reports(state: dict) -> dict:
                     "project_name": content.get("project_name", project.name if project else "未知"),
                     "report_id": report.report_id,
                     "check_date": content.get("check_date", ""),
-                    "total_score": float(report.total_score or 0)
+                    "total_score": float(report.total_score or 0),
+                    "standard_type": report.task.standard_type if report.task else "diecheng"
                 })
 
             # 按总分降序排列
@@ -196,11 +200,22 @@ async def collect_reports(state: dict) -> dict:
             label_b = f"共 {len(projects_info)} 个项目"
 
         logger.info(f"收集到 {len(reports_data)} 份报告数据")
+
+        # 跨标准硬护栏：砺质与蝶城/非蝶城计分体系不同，禁止跨标准对比
+        std_types = {pi.get("standard_type") for pi in projects_info if pi.get("standard_type")}
+        if len(std_types) > 1:
+            labels = "、".join(sorted(std_types))
+            return {
+                "valid": False,
+                "error_message": f"选中的报告分属不同检查标准（{labels}），计分体系不同，无法跨标准对比。请选择同一标准的报告。"
+            }
+
         return {
             "reports_data": reports_data,
             "projects_info": projects_info,
             "label_a": label_a,
             "label_b": label_b,
+            "standard_type": next(iter(std_types), "diecheng"),
             "current_step": "collect_reports",
             "progress_pct": 15
         }
@@ -217,7 +232,6 @@ async def analyze_score(state: dict) -> dict:
     """综合得分对比分析（纯计算）"""
     reports_data = state.get("reports_data", [])
     mode = state.get("mode", "cross_project")
-    module_weights = settings.MODULE_WEIGHTS
 
     comparison_matrix = []
 
@@ -246,11 +260,16 @@ async def analyze_score(state: dict) -> dict:
         score_a = float(rd_a.get("total_score", 0))
         score_b = float(rd_b.get("total_score", 0))
 
-        # 构建模块对比矩阵
+        # 构建模块对比矩阵（按报告实际包含的模块名并集，兼容任意标准）
         modules_a = {m["module_name"]: m for m in rd_a.get("modules", [])}
         modules_b = {m["module_name"]: m for m in rd_b.get("modules", [])}
+        # 模块顺序：以 A 报告模块顺序为主，补齐 B 独有的
+        ordered_names = [m["module_name"] for m in rd_a.get("modules", [])]
+        for m in rd_b.get("modules", []):
+            if m["module_name"] not in ordered_names:
+                ordered_names.append(m["module_name"])
 
-        for mname, weight in module_weights.items():
+        for mname in ordered_names:
             ma = modules_a.get(mname, {})
             mb = modules_b.get(mname, {})
             sa = float(ma.get("module_pct_score", 0))
@@ -259,7 +278,9 @@ async def analyze_score(state: dict) -> dict:
 
             comparison_matrix.append({
                 "module_name": mname,
-                "weight": weight,
+                "weight": ma.get("weight_ratio", mb.get("weight_ratio", 0)),
+                "max_score": ma.get("max_score", mb.get("max_score")),
+                "role": ma.get("role", mb.get("role", "score")),
                 "score_a": sa,
                 "score_b": sb,
                 "diff": diff,
@@ -353,26 +374,40 @@ async def analyze_issue(state: dict) -> dict:
     return {"issue_analysis": issue_analysis}
 
 
-# ==================== 节点5: 维度三 8模块逐一分析 ====================
+# ==================== 节点5: 维度三 逐模块分析 ====================
+def _ordered_module_names(report_dicts: list) -> list:
+    """从若干报告的 modules 中提取模块名并集（保持首次出现顺序）。"""
+    names = []
+    for rd in report_dicts:
+        for m in rd.get("modules", []):
+            mn = m.get("module_name")
+            if mn and mn not in names:
+                names.append(mn)
+    return names
+
+
 async def analyze_module(state: dict) -> dict:
-    """8模块逐一对比分析"""
+    """逐模块对比分析（按报告实际模块，兼容任意标准）"""
     reports_data = state.get("reports_data", [])
-    mode = state.get("mode", "mode")
-    module_weights = settings.MODULE_WEIGHTS
+    mode = state.get("mode", "cross_project")
 
     module_analysis = {"modules": []}
 
     if mode == "all_projects":
         # 模式三：每模块统计各项目得分
-        for mname in module_weights:
+        for mname in _ordered_module_names(reports_data):
             scores = []
+            cfg = {}
             for rd in reports_data:
                 for m in rd.get("modules", []):
                     if m.get("module_name") == mname:
                         scores.append(float(m.get("module_pct_score", 0)))
+                        cfg = m
             module_analysis["modules"].append({
                 "module_name": mname,
-                "weight": module_weights[mname],
+                "weight": cfg.get("weight_ratio", 0),
+                "max_score": cfg.get("max_score"),
+                "role": cfg.get("role", "score"),
                 "scores": scores,
                 "avg": round(sum(scores) / len(scores), 2) if scores else 0,
                 "max": round(max(scores), 2) if scores else 0,
@@ -387,7 +422,7 @@ async def analyze_module(state: dict) -> dict:
         modules_a = {m["module_name"]: m for m in rd_a.get("modules", [])}
         modules_b = {m["module_name"]: m for m in rd_b.get("modules", [])}
 
-        for mname, weight in module_weights.items():
+        for mname in _ordered_module_names([rd_a, rd_b]):
             ma = modules_a.get(mname, {})
             mb = modules_b.get(mname, {})
             aa = analyses_a.get(mname, {})
@@ -398,7 +433,9 @@ async def analyze_module(state: dict) -> dict:
 
             module_analysis["modules"].append({
                 "module_name": mname,
-                "weight": weight,
+                "weight": ma.get("weight_ratio", mb.get("weight_ratio", 0)),
+                "max_score": ma.get("max_score", mb.get("max_score")),
+                "role": ma.get("role", mb.get("role", "score")),
                 "score_a": sa,
                 "score_b": sb,
                 "diff": diff,
@@ -455,7 +492,7 @@ async def generate_insight(state: dict) -> dict:
         "comparison_matrix": matrix_for_llm,
         "summary_a": summary_a,
         "summary_b": summary_b,
-        "module_analyses": module_analysis.get("modules", [])[:8]
+        "module_analyses": module_analysis.get("modules", [])
     }
 
     # 读取相关项目的历史记忆（零风险：无记忆则空串，prompt不变）
@@ -527,14 +564,16 @@ async def render_charts(state: dict) -> dict:
     chart_data = {}
 
     if mode != "all_projects":
-        # 柱状图：8模块得分对比
+        # 柱状图：各模块得分对比
         categories = [m.get("module_name", "") for m in comparison_matrix]
+        # 坐标上限：砺质模块满分25，蝶城为百分制100
+        axis_max = max([m.get("max_score") or 0 for m in comparison_matrix]) or 100
         chart_data["bar"] = {
             "title": {"text": "模块得分对比", "left": "center", "textStyle": {"color": "#1a1d26"}},
             "tooltip": {"trigger": "axis"},
             "legend": {"data": [label_a, label_b], "bottom": 0},
             "xAxis": {"type": "category", "data": categories, "axisLabel": {"rotate": 30}},
-            "yAxis": {"type": "value", "max": 100, "name": "得分"},
+            "yAxis": {"type": "value", "max": axis_max, "name": "得分"},
             "series": [
                 {"name": label_a, "type": "bar", "data": [round(m.get("score_a", 0), 2) for m in comparison_matrix], "itemStyle": {"color": "#2563eb"}},
                 {"name": label_b, "type": "bar", "data": [round(m.get("score_b", 0), 2) for m in comparison_matrix], "itemStyle": {"color": "#8b5cf6"}}
@@ -542,9 +581,10 @@ async def render_charts(state: dict) -> dict:
         }
 
         # 雷达图
-        indicator = [{"name": m.get("module_name", ""), "max": 100} for m in comparison_matrix]
+        n_dims = len(comparison_matrix)
+        indicator = [{"name": m.get("module_name", ""), "max": m.get("max_score") or axis_max} for m in comparison_matrix]
         chart_data["radar"] = {
-            "title": {"text": "8维度雷达图", "left": "center", "textStyle": {"color": "#1a1d26"}},
+            "title": {"text": f"{n_dims}维度雷达图", "left": "center", "textStyle": {"color": "#1a1d26"}},
             "tooltip": {},
             "legend": {"data": [label_a, label_b], "bottom": 0},
             "radar": {"indicator": indicator},
@@ -558,7 +598,7 @@ async def render_charts(state: dict) -> dict:
         }
     else:
         # 模式三：热力图数据
-        module_names = list(settings.MODULE_WEIGHTS.keys())
+        module_names = _ordered_module_names(state.get("reports_data", []))
         project_names = [p.get("project_name", "") for p in projects_info]
         heat_data = []
         for pi_idx, pi in enumerate(projects_info):
@@ -1080,7 +1120,7 @@ async def export_files(state: dict) -> dict:
         chart_images = []
         chart_configs = [
             ("bar", "模块得分对比"),
-            ("radar", "8维度雷达图"),
+            ("radar", "雷达图"),
             ("heatmap", "项目×模块热力图"),
             ("ranking_bar", "项目总分排行"),
         ]
@@ -1313,7 +1353,7 @@ def _generate_pdf(state: dict, final_report_md: str, chart_data: dict, pdf_path:
     # 图表
     chart_configs = [
         ("bar", "模块得分对比"),
-        ("radar", "8维度雷达图"),
+        ("radar", "雷达图"),
         ("heatmap", "项目×模块热力图"),
         ("ranking_bar", "项目总分排行"),
     ]

@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>设计系统 · AI 品质检查系统 v2</title>
+<link rel="stylesheet" href="qc-theme.css">
+<style>
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 40px 32px 80px; }
+  .ds-hero { margin-bottom: 36px; }
+  .ds-hero h1 { font-size: 26px; font-weight: 800; color: var(--ink-900); letter-spacing: -0.5px; }
+  .ds-hero p { font-size: 14px; color: var(--ink-500); margin-top: 6px; max-width: 640px; }
+  .ds-sec { margin-top: 44px; }
+  .ds-sec > h2 { font-size: 15px; font-weight: 700; color: var(--ink-900); padding-bottom: 8px; border-bottom: 1px solid var(--ink-200); margin-bottom: 18px; }
+  .ds-note { font-size: 12.5px; color: var(--ink-500); margin-top: -10px; margin-bottom: 16px; }
+
+  .sw-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 10px; }
+  .sw-card { border: 1px solid var(--ink-200); border-radius: var(--r); overflow: hidden; background: var(--bg-card); }
+  .sw-chip { height: 52px; }
+  .sw-meta { padding: 7px 10px; font-size: 11px; line-height: 1.5; }
+  .sw-meta b { display: block; font-size: 11.5px; color: var(--ink-900); font-family: var(--mono); }
+  .sw-meta span { color: var(--ink-500); }
+
+  .demo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 900px) { .demo-grid { grid-template-columns: 1fr; } }
+  .demo-pane { border: 1px solid var(--ink-200); border-radius: var(--r-lg); background: var(--bg-card); padding: 18px; }
+  .demo-pane > .cap { font-size: 12px; font-weight: 700; color: var(--ink-400); letter-spacing: 0.5px; margin-bottom: 14px; }
+  .demo-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+  .demo-row:last-child { margin-bottom: 0; }
+
+  .type-spec { display: grid; gap: 10px; }
+  .type-line { display: flex; align-items: baseline; gap: 16px; border-bottom: 1px dashed var(--ink-100); padding-bottom: 9px; }
+  .type-line:last-child { border-bottom: none; }
+  .type-tag { width: 150px; flex-shrink: 0; font-size: 11px; font-family: var(--mono); color: var(--ink-400); }
+  code.tk { font-family: var(--mono); font-size: 12px; background: var(--bg-muted); border: 1px solid var(--ink-200); border-radius: 4px; padding: 1px 6px; color: var(--ink-700); }
+
+  .rule { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; color: var(--ink-700); margin-bottom: 9px; }
+  .rule i { width: 6px; height: 6px; border-radius: 50%; background: var(--brand); margin-top: 7px; flex-shrink: 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="ds-hero">
+    <h1>AI 品质检查系统 · 设计系统 v2</h1>
+    <p>方向：现代工具感 · 品牌色青绿 Teal。一个品牌色 + 严格语义色 + 中性灰阶；数字全部等宽；阴影只给浮层；无装饰彩虹。本页与两份原型共用 <code class="tk">qc-theme.css</code>，落地时逐 token 映射进 <code class="tk">App.vue</code> / <code class="tk">design-upgrade.css</code>。</p>
+  </div>
+
+  <!-- ============ 色彩 ============ -->
+  <div class="ds-sec">
+    <h2>色彩</h2>
+    <div class="ds-note">品牌青绿仅用于：主按钮、选中态、链接、图表主系列。语义色仅用于状态表达，禁止装饰性使用。</div>
+    <div class="sw-row">
+      <div class="sw-card"><div class="sw-chip" style="background:var(--brand)"></div><div class="sw-meta"><b>--brand</b><span>#5e6ad2 品牌主色</span></div></div>
+      <div class="sw-card"><div class="sw-chip" style="background:var(--brand-soft);border-bottom:1px solid var(--ink-100)"></div><div class="sw-meta"><b>--brand-soft</b><span>#eef0fb 选中底</span></div></div>
+      <div class="sw-card"><div class="sw-chip" style="background:var(--side-bg)"></div><div class="sw-meta"><b>--side-bg</b><span>#16161c 侧栏底</span></div></div>
+      <div class="sw-card"><div class="sw-chip" style="background:var(--bg)"></div><div class="sw-meta"><b>--bg</b><span>#f7f7f8 页面底</span></div></div>
+      <div class="sw-card"><div class="sw-chip" style="background:var(--bg-card)"></div><div class="sw-meta"><b>--bg-card</b><span>#ffffff 卡片</span></div></div>
+      <div class="sw-card"><div class="sw-chip" style="background:var(--ok)"></div><div class="sw-meta"><b>--ok</b><span>#27945b 通过/良好</span></div></div>
+      <div class="sw-card"><div class="sw-chip" style="background:var(--warn)"></div><div class="sw-meta"><b>--warn</b><span>#b07a12 关注</span></div></div>
+      <div class="sw-card"><div class="sw-chip" style="background:var(--err)"></div><div class="sw-meta"><b>--err</b><span>#e5484d 严重/逾期</span></div></div>
+    </div>
+  </div>
+
+  <!-- ============ 字体 ============ -->
+  <div class="ds-sec">
+    <h2>字体（系统栈，无 CDN 依赖）</h2>
+    <div class="demo-pane">
+      <div class="type-spec">
+        <div class="type-line"><span class="type-tag">--sans / 页面标题 h1 20px·700</span><span style="font-size:20px;font-weight:700;color:var(--ink-900)">数据概览：物业品质检查核心指标</span></div>
+        <div class="type-line"><span class="type-tag">卡片标题 14px·700</span><span style="font-size:14px;font-weight:700;color:var(--ink-900)">各项目模块得分对比</span></div>
+        <div class="type-line"><span class="type-tag">正文 13px·400</span><span style="font-size:13px;color:var(--ink-700)">云鹭湾项目本月已完成 2 次检查，最新总分 4.4。</span></div>
+        <div class="type-line"><span class="type-tag">辅助 12px·400</span><span style="font-size:12px;color:var(--ink-500)">最新一次检查 · 点击行查看详情</span></div>
+        <div class="type-line"><span class="type-tag">KPI 数字 30px·700 tabular</span><span class="kpi-num" style="font-size:30px">4.7<span class="kpi-unit">%</span></span></div>
+        <div class="type-line"><span class="type-tag">表格数字 tabular</span><span class="num" style="font-size:13px;color:var(--ink-800)">102 / 47 / 83.24%</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 组件 ============ -->
+  <div class="ds-sec">
+    <h2>组件</h2>
+    <div class="demo-grid">
+
+      <div class="demo-pane">
+        <div class="cap">按钮</div>
+        <div class="demo-row">
+          <button class="btn btn-primary">开始检查</button>
+          <button class="btn">导出报表</button>
+          <button class="btn btn-ghost">取消</button>
+          <button class="btn" disabled>不可用</button>
+        </div>
+        <div class="demo-row">
+          <button class="btn btn-sm"><svg viewBox="0 0 16 16"><path d="M2 3v10h12M8 7v6M5 10l3 3 3-3"/></svg>小导出</button>
+          <button class="btn btn-sm btn-primary">通过复核</button>
+          <button class="btn btn-sm btn-ghost">驳回</button>
+        </div>
+      </div>
+
+      <div class="demo-pane">
+        <div class="cap">状态芯片 .kt（带语义点）/ 轻量片 .ktag（KPI 卡内）</div>
+        <div class="demo-row">
+          <span class="kt kt-ok">已通过</span>
+          <span class="kt kt-warn">整改中</span>
+          <span class="kt kt-err">严重 9</span>
+          <span class="kt kt-brand">进行中</span>
+          <span class="kt kt-muted">待处理</span>
+        </div>
+        <div class="demo-row">
+          <span class="ktag ktag-ok">已通过 32</span>
+          <span class="ktag ktag-warn">已提交 11</span>
+          <span class="ktag ktag-err">严重 9</span>
+          <span class="ktag ktag-brand">进行中 6</span>
+          <span class="ktag ktag-muted">待处理 3</span>
+        </div>
+      </div>
+
+      <div class="demo-pane">
+        <div class="cap">分数块 .sp（5 分制三档，仅异常用强色）</div>
+        <div class="demo-row">
+          <span class="sp sp-hi">4.8</span>
+          <span class="sp sp-hi">4.5</span>
+          <span class="sp sp-mid">4.2</span>
+          <span class="sp sp-mid">3.5</span>
+          <span class="sp sp-lo">3.2</span>
+          <span class="sp sp-lo">2.9</span>
+          <span class="sp sp-na">–</span>
+        </div>
+        <div class="demo-row" style="font-size:12px;color:var(--ink-500)">
+          ≥4.5 正常（弱绿）· 3.5–4.4 关注（弱琥珀）· &lt;3.5 异常（红，唯一强色）· 无数据（虚线）
+        </div>
+      </div>
+
+      <div class="demo-pane">
+        <div class="cap">输入与筛选</div>
+        <div class="demo-row">
+          <input class="ipt" placeholder="搜索项目 / 任务编号">
+          <select class="sel"><option>全部项目</option><option>云鹭湾</option></select>
+          <button class="btn btn-sm btn-ghost">重置</button>
+        </div>
+        <div class="demo-row">
+          <div class="seg">
+            <button class="on">全部</button><button>待处理</button><button>整改中</button><button>已完成</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="demo-pane" style="grid-column:1/-1">
+        <div class="cap">KPI 卡（无色条无图标 · 标签+大数字+语义轻量片 · hover 出箭头）</div>
+        <div class="kpi-row cols-5" style="margin-bottom:0">
+          <div class="kpi kpi-click">
+            <div class="kpi-lbl">检查任务</div>
+            <div class="kpi-num">47</div>
+            <div class="kpi-tags"><span class="ktag ktag-muted">待处理 3</span><span class="ktag ktag-brand">进行中 6</span></div>
+            <span class="kpi-go"><svg viewBox="0 0 16 16" style="stroke:currentColor;fill:none;stroke-width:1.8"><path d="M6 3l5 5-5 5"/></svg></span>
+          </div>
+          <div class="kpi">
+            <div class="kpi-lbl">本月覆盖率</div>
+            <div class="kpi-num">83<span class="kpi-unit">%</span></div>
+            <div class="kpi-tags"><span class="ktag ktag-muted">5 / 6 项目</span></div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-lbl">问题总数</div>
+            <div class="kpi-num">102</div>
+            <div class="kpi-tags"><span class="ktag ktag-err">严重 9</span><span class="ktag ktag-warn">一般 93</span></div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-lbl">待整改</div>
+            <div class="kpi-num kpi-err">18</div>
+            <div class="kpi-tags"><span class="ktag ktag-muted">已提交 11</span></div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-lbl">整改完成率</div>
+            <div class="kpi-num">64<span class="kpi-unit">%</span></div>
+            <div class="kpi-tags"><span class="ktag ktag-ok">已通过 32</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="demo-pane" style="grid-column:1/-1">
+        <div class="cap">表格（表头小写灰 · 数字右对齐 · 行 hover）</div>
+        <table class="tbl">
+          <thead><tr><th>任务编号</th><th>项目</th><th>检查员</th><th class="num">严重</th><th class="num">一般</th><th class="ctr">得分</th><th class="ctr">状态</th></tr></thead>
+          <tbody>
+            <tr><td class="num">T-240910-01</td><td style="font-weight:600">云鹭湾</td><td>李国栋</td><td class="num">2</td><td class="num">12</td><td class="ctr"><span class="sp sp-hi">4.4</span></td><td class="ctr"><span class="kt kt-brand">已评分</span></td></tr>
+            <tr><td class="num">T-240905-02</td><td style="font-weight:600">梧桐郡</td><td>赵成</td><td class="num" style="color:var(--err-strong);font-weight:700">4</td><td class="num">21</td><td class="ctr"><span class="sp sp-lo">3.8</span></td><td class="ctr"><span class="kt kt-warn">整改中</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="demo-pane">
+        <div class="cap">图表规范 · 量级条形（单色深浅+数值）</div>
+        <div class="hbar-row"><span class="hbar-lbl">机电运维</span><span class="hbar-track"><span class="hbar-fill" style="width:100%;background:var(--chart-ramp-1)"></span></span><span class="hbar-val">26</span></div>
+        <div class="hbar-row"><span class="hbar-lbl">安全管理</span><span class="hbar-track"><span class="hbar-fill" style="width:81%;background:var(--chart-ramp-2)"></span></span><span class="hbar-val">21</span></div>
+        <div class="hbar-row"><span class="hbar-lbl">环境管理</span><span class="hbar-track"><span class="hbar-fill" style="width:69%;background:var(--chart-ramp-3)"></span></span><span class="hbar-val">18</span></div>
+        <div class="hbar-row"><span class="hbar-lbl">设施维护</span><span class="hbar-track"><span class="hbar-fill" style="width:58%;background:var(--chart-ramp-4)"></span></span><span class="hbar-val">15</span></div>
+      </div>
+
+      <div class="demo-pane">
+        <div class="cap">图表规范 · 语义堆叠（好=绿 / 待=灰 / 逾期=红）</div>
+        <div class="hbar-row" style="grid-template-columns:76px 1fr 44px"><span class="hbar-lbl">云鹭湾</span><span class="sbar-track"><span class="sbar-ok" style="width:86%"></span></span><span class="hbar-val">86%</span></div>
+        <div class="hbar-row" style="grid-template-columns:76px 1fr 44px"><span class="hbar-lbl">梧桐郡</span><span class="sbar-track"><span class="sbar-ok" style="width:58%"></span><span class="sbar-over" style="width:8%"></span></span><span class="hbar-val">58%</span></div>
+        <div class="hbar-row" style="grid-template-columns:76px 1fr 44px"><span class="hbar-lbl">蝶城·虹桥</span><span class="sbar-track"><span class="sbar-ok" style="width:37%"></span><span class="sbar-over" style="width:11%"></span></span><span class="hbar-val">37%</span></div>
+        <div class="legend" style="margin-top:10px"><span><i style="background:var(--ok)"></i>已通过</span><span><i style="background:var(--ink-300)"></i>待整改</span><span><i style="background:var(--err)"></i>逾期</span></div>
+      </div>
+
+      <div class="demo-pane">
+        <div class="cap">几何 / 阴影 / 焦点</div>
+        <div class="rule"><i></i><span>圆角：<code class="tk">--r-sm 6px</code> 芯片/小件 · <code class="tk">--r 8px</code> 按钮/输入 · <code class="tk">--r-lg 10px</code> 卡片/浮层</span></div>
+        <div class="rule"><i></i><span>阴影只给浮层：<code class="tk">--shadow-pop</code> 下拉 · <code class="tk">--shadow-overlay</code> 抽屉/弹窗；卡片一律 1px 边框</span></div>
+        <div class="rule"><i></i><span>焦点环：<code class="tk">--focus-ring</code> 品牌色 28% 透明 3px；键盘可达</span></div>
+        <div class="rule"><i></i><span>间距：4/8 栅格；块间距 <code class="tk">--gap-blk 14px</code>；页内边距 22/24</span></div>
+      </div>
+
+      <div class="demo-pane">
+        <div class="cap">浮层 / 空态</div>
+        <div class="demo-row" style="position:relative;height:120px;border:1px dashed var(--ink-200);border-radius:var(--r);overflow:hidden">
+          <div style="position:absolute;right:10px;top:14px;bottom:14px;width:66%;background:var(--bg-card);border:1px solid var(--ink-200);border-radius:var(--r-lg) var(--r-lg) 0 0;border-bottom:none;box-shadow:var(--shadow-overlay)">
+            <div class="drawer-h" style="border-radius:var(--r-lg) var(--r-lg) 0 0"><span class="drawer-t">云鹭湾 · 检查详情</span><button class="icon-x"><svg viewBox="0 0 16 16" style="stroke:currentColor;fill:none;stroke-width:1.8"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>
+            <div style="padding:12px 20px;font-size:12px;color:var(--ink-500)">内容区 · drawer-b</div>
+          </div>
+        </div>
+        <div class="empty" style="padding:18px 0 0">
+          <svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="9" rx="1.5"/><path d="M5 1.5v3M11 1.5v3M2 6.5h12"/></svg>
+          暂无检查数据 —— 0 值/空态一律中性灰，不用绿色
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============ 落地映射 ============ -->
+  <div class="ds-sec">
+    <h2>落地映射（阶段 B 速查）</h2>
+    <div class="demo-pane">
+      <div class="rule"><i></i><span><b>App.vue :root</b> → 全部 tokens（中性/品牌/语义/图表/几何/阴影/焦点）+ <code class="tk">--el-*</code> / <code class="tk">--van-*</code> 映射</span></div>
+      <div class="rule"><i></i><span><b>design-upgrade.css</b> → EP 组件覆盖 + 收拢 <code class="tk">.phdr/.kpi/.kt/.ktag/.filters/.tbl/.pagi/.card</code> 共享类（9 份 scoped 副本删除）</span></div>
+      <div class="rule"><i></i><span><b>utils/chartTheme.js</b> → ECharts 色板 <code class="tk">--chart-1..4</code>、量级 ramp、语义对、轴/tooltip 灰阶；Analysis 后端 option 在 setOption 前过 <code class="tk">applyChartTheme()</code></span></div>
+      <div class="rule"><i></i><span><b>PcLayout.vue</b> → 深侧栏（--side-*）+ 52px 顶栏 + 统一 16px 线性图标 + 导出统一为下拉</span></div>
+      <div class="rule"><i></i><span><b>移动端</b> → Vant 变量接同一 tokens；Login 重做；504 处 hex 全部改 var()</span></div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

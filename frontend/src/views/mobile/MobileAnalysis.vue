@@ -64,7 +64,7 @@
 
     <!-- 进度 -->
     <div v-if="analyzing" class="progress-section">
-      <van-progress :percentage="progressPct" :stroke-width="8" :show-pivot="true" color="#2563eb" />
+      <van-progress :percentage="progressPct" :stroke-width="8" :show-pivot="true" color="var(--blue)" />
       <p class="progress-text">{{ progressStep }}</p>
     </div>
 
@@ -211,13 +211,7 @@
     </div>
     </template>
 
-    <van-tabbar v-model="activeTab" route>
-      <van-tabbar-item icon="chart-trending-o" to="/dashboard">概览</van-tabbar-item>
-      <van-tabbar-item icon="home-o" to="/tasks">任务</van-tabbar-item>
-      <van-tabbar-item icon="todo-list-o" to="/reports">报告</van-tabbar-item>
-      <van-tabbar-item icon="shield-o" to="/rectification">整改</van-tabbar-item>
-      <van-tabbar-item icon="bar-chart-o" to="/analysis-mobile">分析</van-tabbar-item>
-    </van-tabbar>
+    <MobileTabbar />
 
     <!-- 报告选择 Picker -->
     <van-popup v-model:show="showReportPicker" position="bottom" round>
@@ -251,13 +245,13 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { showToast, showSuccessToast } from 'vant'
 import { useAuthStore } from '../../stores/auth'
 import MobileUserSheet from '../../components/MobileUserSheet.vue'
+import MobileTabbar from '../../components/MobileTabbar.vue'
 import { getProjectsWithReports, startAnalysis, getAnalysisProgress, getAnalysisResult, downloadAnalysisFile, getAnalysisHistory } from '../../api/analysis'
 import { getReportList } from '../../api/report'
 
 const authStore = useAuthStore()
 
 const mode = ref('cross_project')
-const activeTab = ref(4)
 const showUser = ref(false)
 const analyzing = ref(false)
 const progressPct = ref(0)
@@ -613,12 +607,12 @@ onMounted(fetchData)
   font-family: "SF Mono", Consolas, monospace;
 }
 
-.score-vs-num.score-winner { color: #059669; }
+.score-vs-num.score-winner { color: var(--ok-strong); }
 
 .score-vs-sep {
   font-size: 16px;
   font-weight: 700;
-  color: #dc2626;
+  color: var(--err);
 }
 
 /* 统计网格 */
@@ -678,11 +672,11 @@ onMounted(fetchData)
 .col-diff { flex: 1; text-align: center; font-weight: 600; font-family: "SF Mono", Consolas, monospace; }
 .col-winner { flex: 0.8; text-align: center; }
 
-.score-good { color: #059669; }
-.score-warn { color: #d97706; }
-.score-bad { color: #dc2626; }
-.diff-positive { color: #059669; }
-.diff-negative { color: #dc2626; }
+.score-good { color: var(--ok-strong); }
+.score-warn { color: var(--orange); }
+.score-bad { color: var(--err); }
+.diff-positive { color: var(--ok-strong); }
+.diff-negative { color: var(--err); }
 .diff-neutral { color: #94a3b8; }
 
 /* 排名 */
@@ -701,7 +695,7 @@ onMounted(fetchData)
 }
 
 .rank-num.rank-top {
-  background: #2563eb;
+  background: var(--blue);
   color: #fff;
 }
 
@@ -718,11 +712,11 @@ onMounted(fetchData)
 .insight-label {
   font-size: 13px;
   font-weight: 600;
-  color: #2563eb;
+  color: var(--blue);
   margin-bottom: 4px;
 }
 
-.insight-label.insight-warn { color: #d97706; }
+.insight-label.insight-warn { color: var(--orange); }
 
 .verdict-block {
   background: #f0f9ff;

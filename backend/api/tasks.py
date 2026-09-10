@@ -6,6 +6,7 @@ import os
 import json
 import uuid as _uuid
 from datetime import datetime
+from collections import defaultdict
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -15,9 +16,10 @@ import openpyxl
 
 from database import get_db
 from models.models import User, Project, InspectionTask, TaskAssignment, InspectionRecord, Issue, Photo, ScoringResult, Report, Rectification
-from api.deps import get_current_user, check_role, get_user_project_filter
+from api.deps import get_current_user, check_role, get_user_project_filter, apply_task_visibility
 from config import settings
 from core.logger import get_logger
+from core import standards as stds
 
 logger = get_logger("tasks")
 
@@ -30,8 +32,9 @@ _template_mtime: Dict[str, float] = {}  # 缓存文件修改时间，用于热�
 
 # 检查标准配置
 STANDARD_TYPES = {
-    "diecheng": {"label": "标准版", "file": "内审检查表V3.0.xlsx"},
-    "feidiecheng": {"label": "简化版", "file": "内审检查表_简化版V3.0.xlsx"},
+    "diecheng": {"label": "蝶城版", "file": "内审检查表V3.0.xlsx"},
+    "feidiecheng": {"label": "非蝶城版", "file": "内审检查表_简化版V3.0.xlsx"},
+    "lizhi": {"label": "砺质版", "file": "砺质行动检查标准（8月）.xlsx"},
 }
 
 
@@ -94,19 +97,42 @@ def load_template_items(module_name: str, standard_type: str = "diecheng") -> Li
         ws = wb[sheet_name]
         items = []
 
+        # 砺质标准：列布局为 A检查内容 / B检查要求 / C评分标准 / D max_score（无权重列）
+        is_lizhi = (standard_type == "lizhi")
+        is_deduction_module = stds.is_deduction_module(standard_type, sheet_name) if is_lizhi else False
+
         for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=1):
             if not row[0]:  # 检查点为空则跳过
                 continue
 
             item_id = f"{sheet_name[:2]}-{row_idx:03d}"
-            items.append({
-                "item_id": item_id,
-                "item_name": str(row[0]) if row[0] else "",
-                "check_standard": str(row[1]) if row[1] else "",
-                "check_method": str(row[2]) if row[2] else "",
-                "scoring_rule": str(row[3]) if row[3] else "完全符合5分",
-                "weight": float(row[7]) if row[7] else 0.01
-            })
+
+            if is_lizhi:
+                check_req = str(row[1]) if len(row) > 1 and row[1] else ""
+                max_score = float(row[3]) if len(row) > 3 and row[3] not in (None, "") else (
+                    stds.get_module_max_score(standard_type, sheet_name) or 0
+                )
+                items.append({
+                    "item_id": item_id,
+                    "item_name": str(row[0]) if row[0] else "",
+                    "check_standard": check_req,
+                    "check_method": check_req,
+                    "scoring_rule": str(row[2]) if len(row) > 2 and row[2] else "",
+                    "weight": 0.0,
+                    "max_score": max_score,
+                    "is_deduction": is_deduction_module,
+                })
+            else:
+                items.append({
+                    "item_id": item_id,
+                    "item_name": str(row[0]) if row[0] else "",
+                    "check_standard": str(row[1]) if row[1] else "",
+                    "check_method": str(row[2]) if row[2] else "",
+                    "scoring_rule": str(row[3]) if row[3] else "完全符合5分",
+                    "weight": float(row[7]) if len(row) > 7 and row[7] else 0.01,
+                    "max_score": 5,
+                    "is_deduction": False,
+                })
 
         wb.close()
         _template_cache[cache_key] = items
@@ -126,9 +152,20 @@ class TaskCreate(BaseModel):
     standard_type: str = "diecheng"  # diecheng / feidiecheng
 
 
+class TaskBatchCreate(BaseModel):
+    project_ids: List[int]
+    check_date: str  # YYYY-MM-DD
+    standard_type: str = "diecheng"
+
+
 class TaskAssign(BaseModel):
     module_name: str
     inspector_id: int
+
+
+class TaskBatchAssign(BaseModel):
+    task_ids: List[str]
+    assignments: List[TaskAssign]
 
 
 class TaskResponse(BaseModel):
@@ -162,7 +199,13 @@ class TaskDetail(BaseModel):
 
 
 # ==================== 模块列表 ====================
+# 向后兼容：蝶城默认模块清单。按标准取模块请用 get_module_names(standard_type)。
 MODULE_NAMES = list(settings.MODULE_WEIGHTS.keys())
+
+
+def get_module_names(standard_type: str) -> List[str]:
+    """按检查标准返回模块名列表"""
+    return stds.get_modules(standard_type)
 
 
 # ==================== API 端点 ====================
@@ -241,8 +284,9 @@ async def get_module_template(
     current_user: User = Depends(get_current_user)
 ):
     """获取指定模块的检查项模板"""
-    if module_name not in MODULE_NAMES:
-        raise HTTPException(status_code=400, detail=f"无效的模块名称，可选：{MODULE_NAMES}")
+    allowed = get_module_names(standard_type)
+    if module_name not in allowed:
+        raise HTTPException(status_code=400, detail=f"无效的模块名称，可选：{allowed}")
 
     items = load_template_items(module_name, standard_type)
     return {
@@ -492,6 +536,165 @@ async def create_task(
     )
 
 
+@router.post("/batch", summary="批量创建检查任务")
+async def create_tasks_batch(
+    request: TaskBatchCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(check_role(["admin"]))
+):
+    """
+    批量创建检查任务：为多个项目创建同检查日期、同标准的任务
+    - 仅管理员可创建
+    - 同项目+同日期+同标准已有任务时跳过（skipped），同一请求内重复的项目id也跳过
+    - 项目不存在记为 failed，其余照常创建；创建部分整体一次提交
+    """
+    date_str = request.check_date.strftime("%Y%m%d") if hasattr(request.check_date, 'strftime') else str(request.check_date).replace('-', '')[:8]
+
+    created_tasks = []
+    skipped, failed = [], []
+    seen_ids = set()
+
+    projects = {p.id: p for p in db.query(Project).filter(Project.id.in_(request.project_ids)).all()}
+
+    for pid in request.project_ids:
+        project = projects.get(pid)
+        if not project:
+            failed.append({"project_id": pid, "reason": "项目不存在"})
+            continue
+        if pid in seen_ids:
+            skipped.append({"project_id": pid, "project_name": project.name, "existing_task_id": None, "reason": "本次请求内重复"})
+            continue
+
+        existing = db.query(InspectionTask).filter(
+            InspectionTask.project_id == pid,
+            InspectionTask.check_date == request.check_date,
+            InspectionTask.standard_type == request.standard_type,
+        ).first()
+        if existing:
+            skipped.append({"project_id": pid, "project_name": project.name, "existing_task_id": existing.task_id, "reason": "该项目当日同标准任务已存在"})
+            continue
+
+        seen_ids.add(pid)
+        task = InspectionTask(
+            task_id=f"Q-{date_str}-{_uuid.uuid4().hex[:8]}",
+            project_id=pid,
+            check_date=request.check_date,
+            standard_type=request.standard_type,
+            status="pending",
+            created_by=current_user.id
+        )
+        db.add(task)
+        created_tasks.append((task, project))
+
+    if created_tasks:
+        db.commit()
+        for task, _ in created_tasks:
+            db.refresh(task)
+
+    return {
+        "total": len(request.project_ids),
+        "created_count": len(created_tasks),
+        "skipped_count": len(skipped),
+        "failed_count": len(failed),
+        "created": [
+            TaskResponse(
+                id=task.id,
+                task_id=task.task_id,
+                project_id=task.project_id,
+                project_name=project.name,
+                check_date=task.check_date,
+                standard_type=task.standard_type,
+                status=task.status,
+                total_score=task.total_score,
+                created_at=task.created_at
+            )
+            for task, project in created_tasks
+        ],
+        "skipped": skipped,
+        "failed": failed,
+    }
+
+
+@router.post("/assign/batch", summary="批量分配检查员")
+async def assign_tasks_batch(
+    request: TaskBatchAssign,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(check_role(["admin"]))
+):
+    """
+    批量分配：把同一套「模块→检查员」方案应用到多个任务
+    - 仅管理员可用
+    - 已有任何分配记录的任务整任务跳过（skipped），不覆盖既有派工
+    - 模块名不属于任务自身检查标准的任务记为 failed（整任务失败，不建半套）
+    - 方案内同一检查员最多2个模块（与单任务分配一致）；分配部分整体一次提交
+    """
+    # 入口预校验：方案本身合法才进循环
+    if not request.assignments:
+        raise HTTPException(status_code=400, detail="分配方案不能为空")
+    inspector_ids = {a.inspector_id for a in request.assignments}
+    inspectors = {u.id: u for u in db.query(User).filter(User.id.in_(inspector_ids)).all()}
+    missing = inspector_ids - set(inspectors.keys())
+    if missing:
+        raise HTTPException(status_code=400, detail=f"检查员不存在: {sorted(missing)}")
+    per_inspector = defaultdict(int)
+    for a in request.assignments:
+        per_inspector[a.inspector_id] += 1
+    overloaded = [i for i, n in per_inspector.items() if n > 2]
+    if overloaded:
+        raise HTTPException(status_code=400, detail="每个检查员最多只能分配2个模块")
+
+    module_names = [a.module_name for a in request.assignments]
+
+    assigned, skipped, failed = [], [], []
+    assigned_rows = []
+
+    tasks = {t.task_id: t for t in db.query(InspectionTask).filter(InspectionTask.task_id.in_(request.task_ids)).all()}
+    projects = {p.id: p.name for p in db.query(Project).all()}
+
+    for tid in request.task_ids:
+        task = tasks.get(tid)
+        if not task:
+            failed.append({"task_id": tid, "reason": "任务不存在"})
+            continue
+
+        allowed_modules = get_module_names(task.standard_type or "diecheng")
+        invalid = [m for m in module_names if m not in allowed_modules]
+        if invalid:
+            failed.append({"task_id": tid, "reason": f"模块名不属于该任务的检查标准: {invalid[0]}"})
+            continue
+
+        has_assignment = db.query(TaskAssignment.id).filter(
+            TaskAssignment.task_id == tid
+        ).first()
+        if has_assignment:
+            skipped.append({"task_id": tid, "reason": "该任务已有分配记录"})
+            continue
+
+        for a in request.assignments:
+            assigned_rows.append(TaskAssignment(
+                task_id=tid,
+                module_name=a.module_name,
+                inspector_id=a.inspector_id,
+            ))
+        if task.status == "pending":
+            task.status = "in_progress"
+        assigned.append({"task_id": tid, "project_name": projects.get(task.project_id, ""), "module_count": len(request.assignments)})
+
+    if assigned_rows:
+        db.add_all(assigned_rows)
+        db.commit()
+
+    return {
+        "total": len(request.task_ids),
+        "assigned_count": len(assigned),
+        "skipped_count": len(skipped),
+        "failed_count": len(failed),
+        "assigned": assigned,
+        "skipped": skipped,
+        "failed": failed,
+    }
+
+
 @router.get("", summary="获取任务列表")
 async def get_tasks(
     project_id: Optional[int] = None,
@@ -506,22 +709,7 @@ async def get_tasks(
     - inspector: 自己被分配的任务
     - field_supervisor/project_staff: 自己分管项目的任务（只读）
     """
-    query = db.query(InspectionTask)
-
-    # field_supervisor / project_staff 只能查看分管项目的任务
-    if current_user.role in ["field_supervisor", "project_staff"]:
-        from api.deps import get_user_project_ids
-        project_ids = get_user_project_ids(current_user, db)
-        if not project_ids:
-            return {"total": 0, "page": page, "page_size": page_size, "items": []}
-        query = query.filter(InspectionTask.project_id.in_(project_ids))
-
-    # inspector 只能看到自己被分配的任务，admin/site_supervisor 可以看全部
-    elif current_user.role == "inspector":
-        assigned_task_ids = db.query(TaskAssignment.task_id).filter(
-            TaskAssignment.inspector_id == current_user.id
-        ).subquery()
-        query = query.filter(InspectionTask.task_id.in_(assigned_task_ids))
+    query = apply_task_visibility(db.query(InspectionTask), current_user, db)
 
     if project_id:
         query = query.filter(InspectionTask.project_id == project_id)
@@ -534,6 +722,7 @@ async def get_tasks(
     # 预计算每个任务的已完成模块数
     task_ids = [t.task_id for t in tasks]
     completed_counts = {}
+    scored_task_ids = set()
     if task_ids:
         rows = db.query(
             InspectionRecord.task_id,
@@ -543,6 +732,11 @@ async def get_tasks(
             InspectionRecord.status == "completed"
         ).group_by(InspectionRecord.task_id).all()
         completed_counts = {r[0]: r[1] for r in rows}
+        scored_task_ids = {
+            row[0] for row in db.query(InspectionRecord.task_id).join(
+                ScoringResult, ScoringResult.record_id == InspectionRecord.record_id
+            ).filter(InspectionRecord.task_id.in_(task_ids)).distinct().all()
+        }
 
     return {
         "total": total,
@@ -555,7 +749,8 @@ async def get_tasks(
                 "project_name": t.project.name if t.project else "",
                 "check_date": t.check_date,
                 "status": t.status,
-                "total_score": float(t.total_score) if t.total_score else None,
+                "total_score": float(t.total_score) if t.total_score is not None else None,
+                "has_scoring_result": t.task_id in scored_task_ids,
                 "completed_modules": completed_counts.get(t.task_id, 0),
                 "standard_type": t.standard_type or "diecheng",
                 "created_at": t.created_at.isoformat()
@@ -589,9 +784,10 @@ async def get_task_detail(
     # project_staff 只能看到自己项目的任务，隐藏其他项目的检查员姓名
     hide_inspector = (current_user.role == "project_staff")
 
-    # 构建模块状态
+    # 构建模块状态（按任务自身的检查标准取模块清单）
+    task_modules = get_module_names(task.standard_type or "diecheng")
     modules = []
-    for module_name in MODULE_NAMES:
+    for module_name in task_modules:
         assignment = assigned_modules.get(module_name)
         # 查找该模块的检查记录（不限制 inspector_id，支持管理员代检场景）
         record = db.query(InspectionRecord).filter(
@@ -599,9 +795,12 @@ async def get_task_detail(
             InspectionRecord.module_name == module_name
         ).order_by(InspectionRecord.updated_at.desc()).first()
 
+        cfg = stds.get_module_cfg(task.standard_type or "diecheng", module_name)
         modules.append({
             "module_name": module_name,
-            "weight": settings.MODULE_WEIGHTS.get(module_name, 0),
+            "weight": cfg.get("weight", 0),
+            "max_score": cfg.get("max_score"),
+            "role": cfg.get("role", "score"),
             "assigned": assignment is not None,
             "inspector_id": assignment.inspector_id if assignment else None,
             "inspector_name": ("" if hide_inspector else (assignment.inspector.real_name if assignment and assignment.inspector else None)),
@@ -675,9 +874,10 @@ async def assign_module(
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
 
-    # 验证模块名称
-    if request.module_name not in MODULE_NAMES:
-        raise HTTPException(status_code=400, detail=f"无效的模块名称，可选：{MODULE_NAMES}")
+    # 验证模块名称（按任务自身的检查标准）
+    allowed = get_module_names(task.standard_type or "diecheng")
+    if request.module_name not in allowed:
+        raise HTTPException(status_code=400, detail=f"无效的模块名称，可选：{allowed}")
 
     # 验证检查员存在
     inspector = db.query(User).filter(User.id == request.inspector_id).first()

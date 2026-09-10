@@ -69,35 +69,46 @@ async def get_project_module_overview(
     if not project:
         raise HTTPException(status_code=404, detail="项目不存在")
 
-    modules = []
-    for module_name, module_weight in settings.MODULE_WEIGHTS.items():
-        # 上次检查信息
-        last_task = db.query(InspectionTask).filter(
-            InspectionTask.project_id == project_id
-        ).order_by(InspectionTask.check_date.desc()).first()
+    from core import standards as _stds
+    from models.models import ScoringResult, Issue as _Issue
 
+    # 项目最近一次检查任务（决定模块清单与计分标准）
+    last_task = db.query(InspectionTask).filter(
+        InspectionTask.project_id == project_id
+    ).order_by(InspectionTask.check_date.desc()).first()
+    std_type = last_task.standard_type if last_task else "diecheng"
+    last_check_date = str(last_task.check_date) if last_task else None
+
+    modules = []
+    for module_name in _stds.get_modules(std_type):
+        cfg = _stds.get_module_cfg(std_type, module_name)
         last_score = None
-        last_check_date = None
         issue_count = 0
 
         if last_task:
-            last_check_date = str(last_task.check_date)
-            from models.models import ScoringResult
-            last_results = db.query(ScoringResult).join(
+            # 模块得分直接取已计算的 module_pct_score（按各标准计分模型正确）
+            mod_results = db.query(ScoringResult).join(
                 InspectionRecord, ScoringResult.record_id == InspectionRecord.record_id
             ).filter(
                 InspectionRecord.task_id == last_task.task_id,
                 ScoringResult.module_name == module_name,
+                ScoringResult.module_pct_score.isnot(None),
             ).all()
-            if last_results:
-                raw_sum = sum(float(r.weighted_score) for r in last_results)
-                weight_sum = sum(float(r.weight) for r in last_results)
-                last_score = round((raw_sum / (5 * weight_sum) * 100), 2) if weight_sum > 0 else None
-                issue_count = sum(1 for r in last_results if float(r.score) < 5)
+            if mod_results:
+                last_score = round(float(mod_results[0].module_pct_score), 2)
+            # 该模块问题数
+            issue_count = db.query(_Issue).join(
+                InspectionRecord, _Issue.record_id == InspectionRecord.record_id
+            ).filter(
+                InspectionRecord.task_id == last_task.task_id,
+                _Issue.module_name == module_name,
+            ).count()
 
         modules.append({
             "module_name": module_name,
-            "weight": module_weight,
+            "weight": cfg.get("weight", 0),
+            "max_score": cfg.get("max_score"),
+            "role": cfg.get("role", "score"),
             "last_score": last_score,
             "last_check_date": last_check_date,
             "last_issue_count": issue_count

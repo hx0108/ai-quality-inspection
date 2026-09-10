@@ -699,61 +699,41 @@ const onSaveApiKey = async () => {
 }
 
 /* ==================== Page Header (prototype .phdr) ==================== */
-.phdr {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  margin-bottom: 20px;
-}
-
-.phdr h1 {
-  font-size: 22px;
-  font-weight: 800;
-  color: var(--ink-900);
-  letter-spacing: -0.4px;
-  margin: 0;
-}
-
-.phdr-sub {
-  font-size: 13px;
-  color: var(--ink-400);
-  margin-top: 3px;
-}
-
-.phdr-acts {
-  display: flex;
-  gap: 8px;
-}
 
 /* ==================== Settings Tabs (prototype .set-tabs) ==================== */
 .set-tabs {
-  display: flex;
-  gap: 0;
+  display: inline-flex;
+  gap: 2px;
   margin-bottom: 18px;
-  border-bottom: 2px solid var(--ink-100);
+  padding: 2px;
+  background: var(--bg-muted);
+  border: 1px solid var(--ink-200);
+  border-radius: var(--r);
 }
 
 .set-tab {
-  padding: 8px 18px;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--ink-400);
+  padding: 0 14px;
+  height: 28px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-600);
   cursor: pointer;
   border: none;
-  background: none;
+  background: transparent;
+  border-radius: var(--r-sm);
   font-family: var(--sans);
-  border-bottom: 2px solid transparent;
-  margin-bottom: -2px;
   transition: all 0.12s;
 }
 
 .set-tab:hover {
-  color: var(--ink-800);
+  color: var(--ink-900);
 }
 
 .set-tab.on {
-  color: var(--blue);
-  border-bottom-color: var(--blue);
+  background: var(--bg-card);
+  color: var(--ink-900);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(22, 22, 28, 0.08);
 }
 
 /* ==================== Panel toggle ==================== */
@@ -772,51 +752,6 @@ const onSaveApiKey = async () => {
 }
 
 /* ==================== Buttons (prototype .btn) ==================== */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  border-radius: var(--r);
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.12s var(--ease);
-  border: 1px solid var(--ink-100);
-  background: var(--bg-card);
-  color: var(--ink-800);
-  font-family: var(--sans);
-}
-
-.btn:hover {
-  background: var(--bg-muted);
-  border-color: var(--ink-200);
-}
-
-.btn svg {
-  width: 14px;
-  height: 14px;
-  stroke: currentColor;
-  fill: none;
-  stroke-width: 1.8;
-}
-
-.btn-primary {
-  background: var(--blue);
-  color: #fff;
-  border-color: var(--blue);
-}
-
-.btn-primary:hover {
-  background: #1d4ed8;
-  border-color: #1d4ed8;
-  color: #fff;
-}
-
-.btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
 
 /* ==================== Input (prototype .f-input) ==================== */
 .f-input {
