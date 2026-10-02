@@ -365,8 +365,12 @@
                   <span v-if="row.is_skipped" class="text-muted">已跳过</span>
                   <span v-else class="editable-score" :class="getItemScoreClass(row.score)" @click="openEditDialog(row, mod)">
                     {{ Number(row.score).toFixed(2) }}
-                    <template v-if="scoringData.standard_type !== 'lizhi'"> / 5</template>
-                    <template v-else-if="mod.role !== 'deduction'"> / {{ Number(row.max_score ?? mod.max_score).toFixed(2) }}</template>
+                    <!-- 分母 = 该项真实满分：蝶城5分制自然显示 /5；封顶制显示各自满分；扣分项为负分无分母 -->
+                    <template v-if="mod.role !== 'deduction' && mod.max_score !== 0">
+                      <template v-if="row.max_score != null && Number(row.max_score) > 0"> / {{ Number(row.max_score).toFixed(2) }}</template>
+                      <template v-else-if="mod.max_score"> / {{ Number(mod.max_score).toFixed(2) }}</template>
+                      <template v-else> / 5</template>
+                    </template>
                     <el-icon v-if="row.is_edited" size="12" color="var(--blue)"><Edit /></el-icon>
                   </span>
                   <el-tag v-if="row.is_fallback" type="warning" size="small" effect="dark" style="margin-left:4px">降级</el-tag>
@@ -1007,16 +1011,16 @@ const editForm = ref({
   edit_reason: ''
 })
 
+// 改分上下限：数据驱动（扣分项允许负分；其余按该项真实满分；蝶城 max_score=5 自然回退 0-5）
 const editScoreMin = computed(() => (
-  editForm.value.standard_type === 'lizhi' && editForm.value.module_role === 'deduction' ? -99.9 : 0
+  editForm.value.module_role === 'deduction' ? -99.9 : 0
 ))
 const editScoreMax = computed(() => {
-  if (editForm.value.standard_type !== 'lizhi') return 5
   if (editForm.value.module_role === 'deduction') return 0
-  return Number(editForm.value.max_score || 0)
+  const m = Number(editForm.value.max_score || 0)
+  return m > 0 ? m : 5
 })
 const editScoreLabel = computed(() => {
-  if (editForm.value.standard_type !== 'lizhi') return '分数 (0-5)'
   if (editForm.value.module_role === 'deduction') return '扣分 (≤0)'
   return `分数 (0-${editScoreMax.value})`
 })

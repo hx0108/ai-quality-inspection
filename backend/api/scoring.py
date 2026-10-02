@@ -86,11 +86,11 @@ class BatchScoringExportRequest(BaseModel):
 
 
 def _get_item_max_score(standard_type: str, module_name: str, item_id: str) -> float:
-    """返回单项评分上限；砺质取检查表max_score，其它标准固定为5。"""
-    if standard_type != "lizhi":
+    """返回单项评分上限；封顶制（砺质/自定义point_cap）取检查表max_score，权重制固定为5。"""
+    from core import standards as _stds
+    if _stds.get_scoring_model(standard_type) != "point_cap":
         return 5.0
 
-    from core import standards as _stds
     template_item = next(
         (item for item in load_template_items(module_name, standard_type)
          if item.get("item_id") == item_id),
