@@ -351,6 +351,15 @@ def _num(v) -> Optional[float]:
         return None
 
 
+_PER_DEDUCT_PAT = re.compile(r"扣\s*(\d+(?:\.\d+)?)\s*分")
+
+
+def _extract_per_deduction(scoring_text: str) -> float:
+    """从扣分条目的评分规则提取每处扣分值（如「每发现1人不合格，扣3分」→3.0）；无匹配返回 0.0"""
+    m = _PER_DEDUCT_PAT.search(scoring_text or "")
+    return float(m.group(1)) if m else 0.0
+
+
 def finalize(parsed: Dict[str, Any]) -> Dict[str, Any]:
     """计分模型定稿 + 权重/满分补齐（导入入口统一调用）"""
     parsed = _sanitize(parsed)
@@ -366,7 +375,12 @@ def finalize(parsed: Dict[str, Any]) -> Dict[str, Any]:
                 m["max_score"] = item_sum if item_sum > 0 else 25.0
             for i in m["items"]:
                 if i["max_score"] is None:
-                    i["max_score"] = 5.0
+                    if m["role"] == "deduction":
+                        # 扣分条目：max_score 语义=每处扣分值（如「每发现1人不合格，扣3分」→3），
+                        # 供 scoring_service 的 per = max_score or 3 直接使用；无匹配则 0（兜底3）
+                        i["max_score"] = _extract_per_deduction(i.get("scoring", ""))
+                    else:
+                        i["max_score"] = 5.0
             if m["role"] == "deduction":
                 m["max_score"] = 0.0
     else:

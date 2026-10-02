@@ -1058,7 +1058,7 @@ class QwenClient:
         """砺质专用评分：完全独立的 Prompt 体系，不与蝶城共享任何逻辑"""
         import httpx as _httpx, json as _json, time as _time
 
-        # 构建检查项文本（每项标注其满分）
+        # 构建检查项文本（计分项标注满分；扣分项显式标注扣分语义）
         items_text = ""
         for i, item in enumerate(problem_items, 1):
             item_id = item.get("item_id", f"item-{i}")
@@ -1078,7 +1078,11 @@ class QwenClient:
                 issues_text = "；".join(parts)
             else:
                 issues_text = "无"
-            items_text += f"\n{i}. [{item_id}] {item_name}\n   满分：{max_score}\n   评分规则：{scoring_rule[:300]}\n   发现问题：{issues_text}"
+            if item.get("is_deduction"):
+                head = "【扣分项】得分=−(每处扣分值×发现处数)，无问题得0分；每处扣分值以评分规则原文为准（如「每发现1人不合格，扣3分」即每处3分）"
+            else:
+                head = f"满分：{max_score}（得分范围0到{max_score}）"
+            items_text += f"\n{i}. [{item_id}] {item_name}\n   {head}\n   评分规则：{scoring_rule[:300]}\n   发现问题：{issues_text}"
 
         SYSTEM_PROMPT = """你是「砺质行动」物业品质检查 AI 评分专家。你只使用砺质检查标准（8月版），不使用任何其他标准。
 
@@ -1214,7 +1218,15 @@ class QwenClient:
         results = []
         for item in items:
             full = item.get("max_score", 5)  # 砺质各项有独立满分；蝶城默认5
-            if item.get("is_skipped"):
+            if item.get("is_deduction"):
+                # 扣分项：AI 失败时不给正分；有问题按保守 -3，无问题 0
+                if item.get("is_skipped"):
+                    score, basis = 0, "跳过项，扣分项计0"
+                elif item.get("issues"):
+                    score, basis = -3.0, f"评分异常({error_msg})，扣分项按保守扣3分"
+                else:
+                    score, basis = 0, f"评分异常({error_msg})，无问题扣分项计0"
+            elif item.get("is_skipped"):
                 score = full
                 basis = "跳过项，自动满分"
             elif item.get("issues"):
