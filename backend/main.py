@@ -184,6 +184,8 @@ def _scheduled_rectification_reminders():
              (today_str,)),
         ]
 
+        wecom_lines = []  # 企业微信群推送汇总
+
         for reminder_type, label, sql, params in reminder_configs:
             c.execute(sql, params)
             rects = [r for r in c.fetchall() if r["reminder_sent"] != reminder_type]
@@ -218,6 +220,11 @@ def _scheduled_rectification_reminders():
                     title = f"整改已逾期 - {project_name}"
                     content = f"项目「{project_name}」有{total_count}条整改已逾期，涉及：{module_detail}。请立即处理。"
 
+                if reminder_type == "expiring":
+                    wecom_lines.append(f"🟡 **{project_name}**：{total_count}条即将到期（{module_detail}）")
+                else:
+                    wecom_lines.append(f"🔴 **{project_name}**：{total_count}条已逾期（{module_detail}）")
+
                 recipients = set()
                 c.execute("""
                     SELECT u.id, u.username FROM users u
@@ -246,6 +253,11 @@ def _scheduled_rectification_reminders():
                 logger.info(f"[整改提醒] {len(by_task)}个项目{label}, 共{len(rects)}条记录")
 
         conn.close()
+
+        # 汇总推送企业微信群（一条消息，避免触发20条/分钟限频）
+        if wecom_lines:
+            from core.wecom import send_wecom_markdown
+            send_wecom_markdown("**📋 整改提醒（每日自动检查）**\n" + "\n".join(wecom_lines))
     except Exception as e:
         logger.error(f"[整改提醒] 失败: {e}")
 
@@ -415,12 +427,13 @@ app.add_middleware(
 
 
 # ==================== 路由注册 ====================
-from api import auth, tasks, inspection, scoring, report, users, projects, analysis, rectification, llm_stats, quality_api, orchestrator, knowledge_base_api, notification, prompts, events, guide, geocode, ai_metrics, backup, settings_api
+from api import auth, tasks, inspection, scoring, report, users, projects, analysis, rectification, llm_stats, quality_api, orchestrator, knowledge_base_api, notification, prompts, events, guide, geocode, ai_metrics, backup, settings_api, standards
 
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["认证"])
 app.include_router(users.router, prefix="/api/v1/users", tags=["用户管理"])
 app.include_router(projects.router, prefix="/api/v1/projects", tags=["项目管理"])
 app.include_router(tasks.router, prefix="/api/v1/tasks", tags=["检查任务"])
+app.include_router(standards.router, prefix="/api/v1/standards", tags=["检查标准"])
 app.include_router(inspection.router, prefix="/api/v1/records", tags=["检查记录"])
 app.include_router(scoring.router, prefix="/api/v1/scoring", tags=["评分"])
 app.include_router(report.router, prefix="/api/v1/reports", tags=["报告"])

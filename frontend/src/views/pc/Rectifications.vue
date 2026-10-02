@@ -265,6 +265,10 @@
           <div class="ai-body">
             <p v-if="current.ai_result.watermark_info"><strong>水印信息：</strong>{{ current.ai_result.watermark_info }}</p>
             <p><strong>分析：</strong>{{ current.ai_result.analysis }}</p>
+            <p v-if="current.ai_result.jev" class="jev-line">
+              <strong>Jev 复核：</strong>结论正确概率 {{ formatJevP(current.ai_result.jev) }} · 独立判断 {{ current.ai_result.jev.alt || '—' }}
+              <span :class="current.ai_result.jev.agreement ? 'jev-ok' : 'jev-warn'">{{ current.ai_result.jev.agreement ? '与视觉模型一致' : '与视觉模型分歧' }}</span>
+            </p>
           </div>
         </div>
         <div class="review-actions">
@@ -317,6 +321,10 @@
           <div class="ai-body">
             <p v-if="current.ai_result.watermark_info"><strong>水印信息：</strong>{{ current.ai_result.watermark_info }}</p>
             <p><strong>分析：</strong>{{ current.ai_result.analysis }}</p>
+            <p v-if="current.ai_result.jev" class="jev-line">
+              <strong>Jev 复核：</strong>结论正确概率 {{ formatJevP(current.ai_result.jev) }} · 独立判断 {{ current.ai_result.jev.alt || '—' }}
+              <span :class="current.ai_result.jev.agreement ? 'jev-ok' : 'jev-warn'">{{ current.ai_result.jev.agreement ? '与视觉模型一致' : '与视觉模型分歧' }}</span>
+            </p>
           </div>
         </div>
         <div v-if="current.review_note" class="review-record">
@@ -504,6 +512,10 @@ const formatConf = (score) => {
   if (score == null) return '—'
   const v = parseFloat(score)
   return isNaN(v) ? score : v.toFixed(2)
+}
+const formatJevP = (jev) => {
+  const v = jev && jev.verdict_p
+  return typeof v === 'number' ? v.toFixed(2) : '—'
 }
 const confStyle = (aiResult) => {
   if (!aiResult || aiResult.confidence_score == null) return {}
@@ -916,6 +928,8 @@ onMounted(fetchData)
 .sp-mid { background: var(--warn-bg); color: var(--warn); }
 .sp-lo { background: var(--err-bg); color: var(--err); }
 .sp-na { color: var(--ink-200); }
+.jev-ok { color: var(--ok); font-weight: 600; margin-left: 6px; }
+.jev-warn { color: var(--warn); font-weight: 600; margin-left: 6px; }
 
 /* ===== Confidence bar ===== */
 .conf-wrap { display: flex; align-items: center; gap: 6px; justify-content: center; }

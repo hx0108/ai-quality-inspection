@@ -673,8 +673,9 @@ class QwenClient:
                            standard_type: str = "diecheng") -> List[Dict[str, Any]]:
         """单批评分（内部方法）"""
 
-        # 砺质走独立评分函数，与蝶城完全隔离
-        if standard_type == "lizhi":
+        # 封顶制（内置砺质 + point_cap 类自定义标准）走独立评分函数，与蝶城完全隔离
+        from core import standards as _stds
+        if _stds.get_scoring_model(standard_type) == "point_cap":
             return await self._score_batch_lizhi(module_name, problem_items, max_retries, memory_context)
 
         is_lizhi = (standard_type == "lizhi")
@@ -1478,6 +1479,19 @@ class QwenClient:
 def _ds_standard_context(standard_type: str) -> dict:
     """DeepSeek 报告/分析 Prompt 的「检查体系背景」按 standard_type 提供。
     蝶城/非蝶城返回既有的八大模块5分制背景；砺质返回5模块+4×25+扣分背景。"""
+    # 自定义封顶制标准：按其模块配置生成通用背景
+    from core import standards as _stds
+    if standard_type != "lizhi" and standard_type.startswith("custom_") and _stds.get_scoring_model(standard_type) == "point_cap":
+        mods = _stds.get_modules(standard_type)
+        mod_lines = "\n".join(
+            f"- {m}（满分{_stds.get_module_max_score(standard_type, m) or 0}）" for m in mods
+        )
+        return {
+            "background": (
+                "本检查采用自定义检查标准（封顶计分制），模块与满分：\n" + mod_lines +
+                "\n扣分模块只减分。请按此体系输出分析。"
+            )
+        }
     if standard_type == "lizhi":
         return {
             "background": (

@@ -236,6 +236,8 @@ class ScoringResult(Base):
     # 置信度与人工复核（Phase 2新增）
     confidence_score = Column(Numeric(3, 2), nullable=True)  # 置信度 0-1，默认0.8
     needs_human_review = Column(Boolean, default=False)       # 是否需要人工复核（置信度<0.8）
+    jev_confidence = Column(Numeric(4, 3), nullable=True)    # Jev 判断模型：给分正确概率 0-1
+    jev_direction = Column(String(10), nullable=True)        # Jev 独立判断：偏低/正确/偏高
     human_reviewed = Column(Boolean, default=False)          # 是否已人工复核
     human_reviewed_by = Column(Integer, nullable=True)       # 复核人
     human_reviewed_at = Column(DateTime, nullable=True)      # 复核时间

@@ -568,7 +568,7 @@ async def get_module_status(
 
     from core import standards as _stds
     standard_type = task.standard_type or "diecheng"
-    is_lizhi = (standard_type == "lizhi")
+    is_lizhi = _stds.get_scoring_model(standard_type) == "point_cap"
     module_iter = _stds.get_modules(standard_type)
 
     for module_name in module_iter:
@@ -731,7 +731,7 @@ def _build_scoring_results(task_id: str, db: Session) -> dict:
     # 计算模块得分和项目总分（按 standard_type 选择计分模型）
     from core.scoring_aggregation import aggregate
     from core import standards as _stds
-    is_lizhi = (standard_type == "lizhi")
+    is_lizhi = _stds.get_scoring_model(standard_type) == "point_cap"
     agg = aggregate(standard_type, modules_data)
     module_pct_map = agg["module_pct"]
 
@@ -850,7 +850,7 @@ async def get_scoring_summary(
     from core.scoring_aggregation import aggregate
     from core import standards as _stds
     standard_type = task.standard_type or "diecheng"
-    is_lizhi = (standard_type == "lizhi")
+    is_lizhi = _stds.get_scoring_model(standard_type) == "point_cap"
     modules_data = {m: {"raw_score_sum": d["raw_sum"], "weight_sum": d["weight_sum"]} for m, d in module_map.items()}
     agg = aggregate(standard_type, modules_data)
 
@@ -981,6 +981,8 @@ async def get_module_detail(
             "is_skipped": r.is_skipped,
             "is_fallback": r.is_fallback or False,
             "is_edited": r.is_edited or False,
+            "jev_confidence": float(r.jev_confidence) if r.jev_confidence is not None else None,
+            "jev_direction": r.jev_direction or "",
             "issues": issues_by_key.get(item_key, [])
         })
 
@@ -1021,7 +1023,8 @@ async def edit_score(
         InspectionRecord.record_id == result.record_id
     ).first()
     standard_type = record.task.standard_type if record and record.task else "diecheng"
-    is_lizhi = standard_type == "lizhi"
+    from core import standards as _stds
+    is_lizhi = _stds.get_scoring_model(standard_type) == "point_cap"
 
     if not math.isfinite(request.score):
         raise HTTPException(status_code=400, detail="分数必须是有效数字")
@@ -1437,7 +1440,7 @@ async def export_scoring_excel(
     from core.scoring_aggregation import aggregate
     from core import standards as _stds
     standard_type = task.standard_type or "diecheng"
-    is_lizhi = (standard_type == "lizhi")
+    is_lizhi = _stds.get_scoring_model(standard_type) == "point_cap"
     _agg_input = {
         m: {
             "raw_score_sum": sum(float(r.weighted_score) for r in rs),
@@ -1834,6 +1837,8 @@ async def get_global_review_queue(
             "item_name": r.item_name or "",
             "score": float(r.score or 0),
             "confidence_score": float(r.confidence_score or 0),
+            "jev_confidence": float(r.jev_confidence) if r.jev_confidence is not None else None,
+            "jev_direction": r.jev_direction or "",
             "scoring_basis": r.scoring_basis or "",
             "is_edited": r.is_edited,
             "human_reviewed": r.human_reviewed,

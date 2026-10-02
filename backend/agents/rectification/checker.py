@@ -233,12 +233,71 @@ async def check_rectification(
         else:
             ai_result["suggestion"] = "驳回"
 
+        # Jev 交叉验证：判断模型复核视觉模型结论（shadow 仅记录 / active 参与路由），失败静默跳过
+        try:
+            from core.jev_client import jev_available, jev_system_one
+            if jev_available():
+                jev_answers = await jev_system_one(
+                    _build_jev_state(
+                        issue_description, issue_severity, issue_location,
+                        rectification_note, expected_location, ai_result
+                    ),
+                    {
+                        "verdict_correct": {
+                            "type": "noul",
+                            "instructions": "视觉模型的核查结论正确，该整改应按该结论处置",
+                        },
+                        "independent": {
+                            "type": "choice",
+                            "instructions": "仅依据上述文字材料，独立判断该整改应如何处置",
+                            "criteria": {
+                                "通过": "整改合格，证据充分",
+                                "驳回": "整改不合格或证据明显矛盾",
+                                "人工复核": "证据不足或存在疑点，需人工判断",
+                            },
+                        },
+                    },
+                    call_type="jev_rectification",
+                )
+                if jev_answers:
+                    alt = jev_answers.get("independent", {}).get("choice")
+                    ai_result["jev"] = {
+                        "verdict_p": jev_answers.get("verdict_correct", {}).get("noul"),
+                        "alt": alt,
+                        "alt_probs": jev_answers.get("independent", {}).get("probabilities"),
+                        "agreement": alt in (None, ai_result.get("suggestion")),
+                        "model": settings.JEV_MODEL,
+                    }
+                    logger.info(
+                        f"Jev 交叉验证: suggestion={ai_result.get('suggestion')}, "
+                        f"verdict_p={ai_result['jev']['verdict_p']}, alt={alt}"
+                    )
+        except Exception as e:
+            logger.warning(f"Jev 交叉验证失败（不影响核查结果）: {e}")
+
         return ai_result
 
     except json.JSONDecodeError:
         return _default_result(False, "AI返回格式解析失败")
     except Exception as e:
         return _default_result(False, f"AI核查异常: {str(e)}")
+
+
+def _build_jev_state(issue_description: str, issue_severity: str, issue_location: str,
+                     rectification_note: str, expected_location: str,
+                     ai_result: Dict[str, Any]) -> str:
+    """构造整改复核 Jev state：文字材料 + 视觉模型核查摘要（Jev 不能看图，视觉证据靠文字转述）"""
+    return (
+        "物业品质检查整改复核交叉验证。\n"
+        f"【原问题】[{issue_severity}] {issue_description}（位置：{issue_location or '未指定'}）\n"
+        f"【整改说明】{rectification_note or '无说明'}（预期地点：{expected_location or '未指定'}）\n"
+        "【视觉模型核查摘要】\n"
+        f"- 照片核查：{'有效' if ai_result.get('photo_valid') else '无效'}；{ai_result.get('photo_info', '')}\n"
+        f"- 说明核查：{'合格' if ai_result.get('note_qualified') else '不合格'}；{ai_result.get('note_info', '')}\n"
+        f"- 整改深度：{ai_result.get('rectification_depth', '')}\n"
+        f"- 综合分析：{(ai_result.get('analysis') or '')[:1500]}\n"
+        f"【视觉模型结论】{ai_result.get('suggestion')}（自报置信度{ai_result.get('confidence_score')}）"
+    )
 
 
 def _encode_image(file_path: str, max_size: int = 1024, quality: int = 75) -> Optional[str]:

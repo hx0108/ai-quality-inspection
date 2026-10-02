@@ -68,7 +68,7 @@ class GoldenDatasetGenerator:
                     continue
 
                 # 构建样本
-                sample = self._build_sample(record)
+                sample = self._build_sample(record, db)
                 if sample:
                     module_samples[module].append(sample)
 
@@ -82,8 +82,8 @@ class GoldenDatasetGenerator:
         finally:
             db.close()
 
-    def _build_sample(self, record: ScoringResult) -> Optional[Dict]:
-        """从评分记录构建Golden Sample"""
+    def _build_sample(self, record: ScoringResult, db) -> Optional[Dict]:
+        """从评分记录构建Golden Sample（复用调用方会话，避免SQLite二开会话锁）"""
         # 获取问题信息
         issues = db.query(Issue).filter(
             Issue.record_id == record.record_id,

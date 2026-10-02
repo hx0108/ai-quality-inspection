@@ -92,7 +92,7 @@ async def collect_data(state: dict) -> dict:
         from core.scoring_aggregation import aggregate
         from core import standards as _stds
         standard_type = task.standard_type or "diecheng"
-        is_lizhi = (standard_type == "lizhi")
+        is_lizhi = _stds.get_scoring_model(standard_type) == "point_cap"
         _agg_input = {
             m: {"raw_score_sum": d["raw_score_sum"], "weight_sum": d["weight_sum"]}
             for m, d in modules_data.items()

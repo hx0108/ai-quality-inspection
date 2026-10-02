@@ -2,6 +2,7 @@
 统一评分服务
 供 api/scoring.py 和 agents/scoring/nodes.py 共同调用，消除逻辑重复
 """
+import asyncio
 import uuid as _uuid
 from datetime import datetime
 from typing import List, Dict, Any, Optional
@@ -12,6 +13,7 @@ from models.models import InspectionRecord, Issue, ScoringResult
 from config import settings
 from core.llm_client import QwenClient
 from core.logger import get_logger
+from core import standards as _stds
 from api.tasks import load_template_items
 from core.short_memory import ShortMemory
 from core.long_memory import LongMemory, get_memory_context_for_scoring
@@ -76,7 +78,7 @@ async def score_module_core(
         return {"results": [], "module_name": module_name, "count": 0, "errors": [f"无模板数据: {module_name}"]}
 
     # 4. 分离合格项 / 有问题项 / 扣分项
-    is_lizhi = (standard_type == "lizhi")
+    is_lizhi = _stds.get_scoring_model(standard_type) == "point_cap"
     qualified_items = []
     problem_items = []
     deduction_items = []  # 砺质扣分项（其他场所5S，旧标准为BI及5S）：确定性计分，不走AI
@@ -143,6 +145,10 @@ async def score_module_core(
         ai_results = await llm.score_module(module_name, problem_items, memory_context=memory_context, standard_type=standard_type)
         logger.info(f"AI返回: {module_name} ({len(ai_results)}项)")
         results.extend(ai_results)
+
+        # Jev 置信度复核：有问题项逐项判断 AI 给分是否可信（shadow 仅记录 / active 参与置信度）
+        if settings.JEV_ENABLED:
+            await _jev_verify_scores(module_name, problem_items, ai_results)
     elif problem_items:
         # 无API Key，使用简单规则评分
         for item in problem_items:
@@ -185,6 +191,15 @@ async def score_module_core(
         confidence_score = item_result.get("confidence_score", _calculate_confidence(item_result, original_item))
         needs_review = confidence_score < CONFIDENCE_THRESHOLD if confidence_score else False
 
+        # Jev active 模式：校准概率参与置信度（取较小值），方向性偏差强制人工复核
+        # shadow 模式不改路由，但同样落库（记录即 shadow 数据，供校准/前端展示）
+        jev = item_result.get("_jev")
+        if settings.JEV_MODE == "active" and jev and isinstance(jev.get("p"), (int, float)):
+            confidence_score = min(confidence_score or 1.0, jev["p"])
+            needs_review = needs_review or not jev.get("agreement", True)
+        jev_p = jev.get("p") if jev and isinstance(jev.get("p"), (int, float)) else None
+        jev_direction = (jev.get("direction") if jev else None) or None
+
         # 砺质：weighted_score 直接等于原始分值（无权重概念）；其它标准维持 score×weight
         if is_lizhi:
             weighted_score = score
@@ -208,6 +223,8 @@ async def score_module_core(
             is_skipped=item_result.get("is_skipped", False),
             confidence_score=confidence_score,
             needs_human_review=needs_review,
+            jev_confidence=jev_p,
+            jev_direction=jev_direction,
         )
         db.add(result)
 
@@ -254,7 +271,7 @@ def save_default_scores(
         if not template_items:
             return
 
-        is_lizhi = (standard_type == "lizhi")
+        is_lizhi = _stds.get_scoring_model(standard_type) == "point_cap"
         for item in template_items:
             max_score = item.get("max_score", 5)
             is_deduction = item.get("is_deduction", False)
@@ -341,6 +358,77 @@ def _calculate_confidence(item_result: Dict, original_item: Dict) -> float:
         base_confidence -= 0.05
 
     return max(0.5, min(1.0, base_confidence))
+
+
+async def _jev_verify_scores(module_name: str, problem_items: List[Dict], ai_results: List[Dict]):
+    """
+    用 Jev 判断模型复核 AI 评分：每项问两个类型化问题
+    - score_correct (noul): AI 给分是否符合检查标准与评分规则
+    - direction (choice): 给分偏低 / 正确 / 偏高
+
+    结果写入 ai_results[i]["_jev"]（下划线前缀=过程数据，不落库），
+    active 模式下在保存阶段参与置信度计算；失败项静默跳过。
+    """
+    from core.jev_client import jev_available, jev_system_one
+    if not jev_available():
+        return
+
+    items_by_id = {it["item_id"]: it for it in problem_items}
+    sem = asyncio.Semaphore(5)  # 并发上限，避免拖慢评分链路
+
+    async def verify_one(item_result: Dict):
+        item = items_by_id.get(item_result.get("item_id"))
+        if not item:
+            return
+        async with sem:
+            answers = await jev_system_one(
+                _build_jev_scoring_state(item, item_result),
+                {
+                    "score_correct": {
+                        "type": "noul",
+                        "instructions": "AI对该检查项的给分符合检查标准与评分规则",
+                    },
+                    "direction": {
+                        "type": "choice",
+                        "instructions": "该给分相对检查标准与评分规则应有的分数",
+                        "criteria": {
+                            "偏低": "AI给分比应有分数低，扣分过重",
+                            "正确": "给分与标准相符",
+                            "偏高": "AI给分比应有分数高，扣分不足",
+                        },
+                    },
+                },
+                call_type="jev_scoring",
+            )
+        if not answers:
+            return
+        direction = answers.get("direction") or {}
+        item_result["_jev"] = {
+            "p": answers.get("score_correct", {}).get("noul"),
+            "direction": direction.get("choice"),
+            "agreement": direction.get("choice") in (None, "正确"),
+        }
+        logger.info(
+            f"Jev 复核: {module_name}/{item_result.get('item_id')} "
+            f"score={item_result.get('score')} p={item_result['_jev']['p']} dir={item_result['_jev']['direction']}"
+        )
+
+    await asyncio.gather(*(verify_one(r) for r in ai_results if r.get("item_id") in items_by_id))
+
+
+def _build_jev_scoring_state(item: Dict, item_result: Dict) -> str:
+    """构造评分复核的 Jev state：检查标准 + 问题 + AI 结论（纯文本，无图）"""
+    issues_text = "; ".join(
+        f"[{i.get('severity', '一般')}] {i.get('description', '')}" for i in item.get("issues", [])
+    ) or "无"
+    return (
+        f"物业品质检查评分复核。检查项：{item.get('item_name', '')}\n"
+        f"检查标准：{item.get('check_standard', '')}\n"
+        f"评分规则：{item.get('scoring_rule', '')}\n"
+        f"发现的问题：{issues_text}\n"
+        f"AI给分（满分{item.get('max_score', 5)}）：{item_result.get('score')}\n"
+        f"AI评分依据：{item_result.get('scoring_basis', '')}"
+    )
 
 
 def _build_memory_context(

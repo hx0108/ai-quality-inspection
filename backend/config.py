@@ -39,6 +39,17 @@ class Settings:
     DEEPSEEK_API_KEY: str = os.getenv("DEEPSEEK_API_KEY", "")
     DEEPSEEK_BASE_URL: str = "https://api.deepseek.com"
 
+    # Jev 判断模型（TypeSafe System One）——AI评分/整改复核的校准置信度
+    # Jev 不生成文字，只返回类型化判断+校准概率，用于复核生成式模型的结论
+    JEV_API_KEY: str = os.getenv("JEV_API_KEY", "")
+    JEV_ENABLED: bool = os.getenv("JEV_ENABLED", "false").lower() == "true"
+    # shadow=只记录交叉验证结果不改路由（默认）；active=Jev 概率参与判定
+    JEV_MODE: str = os.getenv("JEV_MODE", "shadow")
+    JEV_BASE_URL: str = os.getenv("JEV_BASE_URL", "https://api.typesafe.ai")
+    JEV_MODEL: str = os.getenv("JEV_MODEL", "jev-latest")
+    # active 模式：Jev 判"结论正确"的概率低于此值 → 强制人工复核
+    JEV_REVIEW_THRESHOLD: float = float(os.getenv("JEV_REVIEW_THRESHOLD", "0.7"))
+
     # LLM 降级模型（主模型熔断时自动切换，留空则不降级）
     QWEN_FALLBACK_MODEL: str = os.getenv("QWEN_FALLBACK_MODEL", "qwen-turbo")
     DEEPSEEK_FALLBACK_MODEL: str = os.getenv("DEEPSEEK_FALLBACK_MODEL", "deepseek-chat")
@@ -46,6 +57,9 @@ class Settings:
     # Human-in-the-Loop 审核门控（默认关闭，开启后低置信度评分需人工审核才继续生成报告）
     ENABLE_HUMAN_REVIEW_GATE: bool = os.getenv("ENABLE_HUMAN_REVIEW_GATE", "false").lower() == "true"
     HUMAN_REVIEW_CONFIDENCE_THRESHOLD: float = float(os.getenv("HUMAN_REVIEW_CONFIDENCE_THRESHOLD", "0.8"))
+
+    # 企业微信群机器人 Webhook（群聊右上角"添加机器人"获取，留空则不推送）
+    WECOM_WEBHOOK_URL: str = os.getenv("WECOM_WEBHOOK_URL", "")
 
     # 文件上传安全配置
     MAX_PHOTO_SIZE: int = int(os.getenv("MAX_PHOTO_SIZE", str(10 * 1024 * 1024)))  # 默认10MB

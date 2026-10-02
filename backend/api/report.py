@@ -106,6 +106,12 @@ def run_report_generation_sync(task_id: str):
                     async_send=True
                 )
             db_notif.close()
+            # 推送企业微信群机器人
+            from core.wecom import send_wecom_markdown
+            send_wecom_markdown(
+                f"**📊 质检报告已生成**\n"
+                f"项目「{project_name}」的检查报告已生成完成，请登录后台查阅。"
+            )
         except Exception as ne:
             logger.warning(f"报告完成通知发送失败: {ne}")
     except Exception as e:

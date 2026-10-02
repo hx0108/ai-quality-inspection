@@ -76,6 +76,7 @@ def init_db():
     _migrate_rectification_deadline()  # 整改截止日期+提醒状态
     _migrate_photo_metadata()      # 照片水印元数据字段
     _migrate_system_settings()     # 系统设置表（API KEY 管理）
+    _migrate_custom_standards()    # 自定义检查标准表（标准导入功能）
 
 
 def _migrate_users_must_change_pwd():
@@ -152,6 +153,8 @@ def _migrate_scoring_results():
             ("is_fallback", "ALTER TABLE scoring_results ADD COLUMN is_fallback BOOLEAN DEFAULT 0"),
             ("edit_reason", "ALTER TABLE scoring_results ADD COLUMN edit_reason VARCHAR(200)"),
             ("original_score", "ALTER TABLE scoring_results ADD COLUMN original_score DECIMAL(3,1)"),
+            ("jev_confidence", "ALTER TABLE scoring_results ADD COLUMN jev_confidence DECIMAL(4,3)"),
+            ("jev_direction", "ALTER TABLE scoring_results ADD COLUMN jev_direction VARCHAR(10)"),
         ]
         # 检查已有列，避免重复添加
         result = conn.execute(text("PRAGMA table_info(scoring_results)"))
@@ -723,6 +726,36 @@ def _migrate_rectification_deadline():
         if count > 0:
             conn.commit()
             logger.info(f"Backfilled deadline for {count} rectification records")
+
+
+def _migrate_custom_standards():
+    """创建 custom_standards 表（检查标准导入功能生成的自定义标准）"""
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS custom_standards (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    standard_type VARCHAR(50) UNIQUE NOT NULL,
+                    label VARCHAR(100) NOT NULL,
+                    scoring_model VARCHAR(20) NOT NULL DEFAULT 'point_cap',
+                    modules_json TEXT NOT NULL DEFAULT '{}',
+                    module_count INTEGER NOT NULL DEFAULT 0,
+                    items_total INTEGER NOT NULL DEFAULT 0,
+                    template_file VARCHAR(255) NOT NULL,
+                    source_filename VARCHAR(255),
+                    created_by INTEGER,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    is_active INTEGER NOT NULL DEFAULT 1
+                )
+            """))
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_custom_standards_type ON custom_standards(standard_type)"
+            ))
+            conn.commit()
+            logger.info("custom_standards table ready")
+        except Exception as e:
+            logger.debug(f"Skip custom_standards: {e}")
 
 
 def _migrate_system_settings():

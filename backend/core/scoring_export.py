@@ -156,7 +156,7 @@ def build_batch_scoring_workbook(tasks, records, results, issues, photos):
         if not task_results:
             continue
         standard_type = task.standard_type or "diecheng"
-        is_lizhi = standard_type == "lizhi"
+        is_lizhi = standards.get_scoring_model(standard_type) == "point_cap"
         module_results = defaultdict(list)
         aggregate_input = {}
         for result in task_results:

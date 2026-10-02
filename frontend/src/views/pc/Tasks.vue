@@ -89,7 +89,8 @@
             <td>
               <span v-if="row.standard_type === 'diecheng'" class="kt kt-blue">蝶城</span>
               <span v-else-if="row.standard_type === 'lizhi'" class="kt kt-lizhi">砺质</span>
-              <span v-else class="kt kt-warn">非蝶城</span>
+              <span v-else-if="row.standard_type === 'feidiecheng'" class="kt kt-warn">非蝶城</span>
+              <span v-else class="kt kt-blue" :title="row.standard_type">{{ standardLabel(row.standard_type) }}</span>
             </td>
             <td>{{ row.check_date || '-' }}</td>
             <td><span class="st" :class="statusClass(row.status)">{{ statusText(row.status) }}</span></td>
@@ -558,6 +559,7 @@ import { getTasks, getTaskDetail, createTask, createTaskBatch, createTaskAssignB
 import { getScoringResults, getScoringStatus, startScoring, editScore, rescoreModule, exportScoringExcel, exportBatchScoringExcel, getScoringSummary, getModuleDetail } from '../../api/scoring'
 import { recallModule, recallItem } from '../../api/inspection'
 import { runFullPipeline, getPipelineStatus } from '../../api/orchestrator'
+import { getStandardList } from '../../api/standards'
 import { useAuthStore } from '../../stores/auth'
 import request from '../../utils/request'
 import { getAuthToken } from '../../utils/authStorage'
@@ -717,12 +719,30 @@ const fetchInspectors = async () => {
   } catch (e) { /* ignore */ }
 }
 
-const fetchStandardTypes = () => {
-  standardTypes.value = [
-    { value: 'diecheng', label: '蝶城版' },
-    { value: 'feidiecheng', label: '非蝶城版' },
-    { value: 'lizhi', label: '砺质版' }
-  ]
+const fetchStandardTypes = async () => {
+  try {
+    const res = await getStandardList()
+    standardTypes.value = (res.items || []).map(s => ({
+      value: s.standard_type,
+      label: s.label,
+      module_count: s.module_count,
+    }))
+    // 模块数映射（进度条分母），兜底内置标准
+    stdModuleCounts.value = Object.fromEntries(standardTypes.value.map(s => [s.value, s.module_count || 8]))
+  } catch (e) {
+    standardTypes.value = [
+      { value: 'diecheng', label: '蝶城版', module_count: 8 },
+      { value: 'feidiecheng', label: '非蝶城版', module_count: 8 },
+      { value: 'lizhi', label: '砺质版', module_count: 5 }
+    ]
+  }
+}
+const stdModuleCounts = ref({ 'diecheng': 8, 'feidiecheng': 8, 'lizhi': 5 })
+
+// 检查标准显示名（自定义标准取导入时的名称）
+const standardLabel = (std) => {
+  const hit = standardTypes.value.find(s => s.value === std)
+  return hit ? hit.label : std
 }
 
 const clearTaskSelection = () => { selectedTaskIds.value = [] }
@@ -790,7 +810,7 @@ const onBatchExport = async () => {
 const statusType = (s) => ({ pending: 'info', in_progress: 'warning', completed: 'success' }[s] || 'info')
 const statusText = (s) => ({ pending: '待开始', in_progress: '进行中', completed: '已完成' }[s] || s)
 // 各检查标准的模块总数（蝶城/非蝶城=8，砺质=5），用于进度条分母
-const moduleTotal = (std) => (std === 'lizhi' ? 5 : 8)
+const moduleTotal = (std) => stdModuleCounts.value[std] || 8
 
 const openCreate = () => {
   newTask.value = { project_id: null, check_date: '', standard_type: 'diecheng' }

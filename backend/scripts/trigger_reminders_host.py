@@ -16,6 +16,7 @@ over1 = (today - timedelta(days=1)).strftime("%Y-%m-%d")
 conn = sqlite3.connect(DB_PATH)
 conn.row_factory = sqlite3.Row
 c = conn.cursor()
+wecom_lines = []  # 企业微信群推送汇总
 
 # Clear old notifications
 c.execute("DELETE FROM notifications")
@@ -69,9 +70,11 @@ for deadline, reminder_type, label in [
         if reminder_type == "expiring":
             title = f"整改即将到期 - {project_name}"
             content = f"项目「{project_name}」有{total_count}条整改将于5天后到期（截止：{deadline}），涉及：{module_detail}。请尽快督促整改。"
+            wecom_lines.append(f"🟡 **{project_name}**：{total_count}条即将到期（{module_detail}）")
         else:
             title = f"整改已逾期 - {project_name}"
             content = f"项目「{project_name}」有{total_count}条整改已逾期（截止：{deadline}），涉及：{module_detail}。请立即处理。"
+            wecom_lines.append(f"🔴 **{project_name}**：{total_count}条已逾期（{module_detail}）")
 
         # Find recipients
         recipients = set()
@@ -107,4 +110,19 @@ for deadline, reminder_type, label in [
     print(f"{label}: {len(by_task)}个项目, {len(rects)}条记录")
 
 conn.close()
+
+# 汇总推送企业微信群（自包含实现：宿主机脚本不依赖 backend 配置模块）
+WEBHOOK_URL = os.getenv("WECOM_WEBHOOK_URL", "")
+if wecom_lines and WEBHOOK_URL:
+    try:
+        import json, urllib.request
+        payload = json.dumps({
+            "msgtype": "markdown",
+            "markdown": {"content": "**📋 整改提醒（每日自动检查）**\n" + "\n".join(wecom_lines)},
+        }).encode("utf-8")
+        req = urllib.request.Request(WEBHOOK_URL, data=payload, headers={"Content-Type": "application/json"})
+        urllib.request.urlopen(req, timeout=10)
+        print("企业微信推送完成")
+    except Exception as e:
+        print(f"企业微信推送失败: {e}")
 print("Done!")

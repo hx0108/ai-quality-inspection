@@ -59,16 +59,17 @@
               <th>检查项</th>
               <th>AI评分</th>
               <th>置信度</th>
+              <th>Jev 复核</th>
               <th>评分时间</th>
               <th>操作</th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="tableLoading">
-              <td colspan="8" style="text-align:center;padding:40px;color:var(--ink-400)">加载中...</td>
+              <td colspan="9" style="text-align:center;padding:40px;color:var(--ink-400)">加载中...</td>
             </tr>
             <tr v-else-if="items.length === 0">
-              <td colspan="8" style="text-align:center;padding:40px;color:var(--ink-400)">暂无数据</td>
+              <td colspan="9" style="text-align:center;padding:40px;color:var(--ink-400)">暂无数据</td>
             </tr>
             <tr v-for="row in items" :key="row.scoring_id || row.task_id">
               <td>{{ row.task_id }}</td>
@@ -77,6 +78,10 @@
               <td style="text-align:left">{{ row.item_name || '-' }}</td>
               <td><span class="sp" :class="scoreClass(row.score)">{{ row.score }}</span></td>
               <td><span class="kt" :class="confidenceClass(row.confidence_score)">{{ row.confidence_score }}</span></td>
+              <td>
+                <span v-if="row.jev_direction" class="kt" :class="jevClass(row.jev_direction)">{{ row.jev_direction }} {{ row.jev_confidence != null ? Number(row.jev_confidence).toFixed(2) : '' }}</span>
+                <span v-else style="color:var(--ink-300)">—</span>
+              </td>
               <td>{{ row.scored_at || '-' }}</td>
               <td>
                 <button class="act" @click="openReview(row)">复核</button>
@@ -105,6 +110,15 @@
               <el-tag :type="reviewItem.confidence_score >= 0.6 ? 'warning' : 'danger'" size="small">
                 {{ reviewItem.confidence_score }}
               </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="Jev 复核" :span="reviewItem.jev_direction ? 1 : 2">
+              <template v-if="reviewItem.jev_direction">
+                <el-tag :type="reviewItem.jev_direction === '正确' ? 'success' : 'warning'" size="small">
+                  {{ reviewItem.jev_direction }}
+                </el-tag>
+                <span v-if="reviewItem.jev_confidence != null" style="margin-left:6px">给分正确概率 {{ Number(reviewItem.jev_confidence).toFixed(2) }}</span>
+              </template>
+              <span v-else style="color:var(--ink-300)">未复核（Jev 未启用或无数据）</span>
             </el-descriptions-item>
           </el-descriptions>
 
@@ -246,6 +260,12 @@ function scoreClass(score) {
 function confidenceClass(confidence) {
   if (confidence >= 0.85) return 'kt-blue'
   if (confidence >= 0.6) return 'kt-warn'
+  return 'kt-err'
+}
+
+function jevClass(direction) {
+  if (direction === '正确') return 'kt-blue'
+  if (direction === '偏低') return 'kt-warn'
   return 'kt-err'
 }
 

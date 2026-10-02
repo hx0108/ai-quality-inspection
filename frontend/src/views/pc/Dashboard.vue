@@ -268,6 +268,7 @@ function downloadChartImage(chartInstance, fileName) {
 
 // ==================== 导出：模块得分对比表 ====================
 const exportScoreTable = (format) => {
+  if (format === 'lizhi') return exportLizhiTable()
   const headers = ['项目名称', ...moduleNames.value.map(m => m.label), '总分']
   const rows = projectScores.value.map(p => {
     return [
@@ -283,6 +284,33 @@ const exportScoreTable = (format) => {
   } else {
     saveExcel(data, `项目模块得分对比_${ts}.xlsx`, '模块得分对比')
   }
+}
+
+// ==================== 导出：砺质礼韵专项表（固定 8 列） ====================
+const LIZHI_MODULES = ['管家礼韵塑新颜', '安防礼韵塑新颜', '环境礼韵塑新颜', '技术礼韵塑新颜', '其他场所5S']
+
+const exportLizhiTable = () => {
+  // 全量项目（含未检查的，留空），按名称排序，对齐砺质月报模板
+  const scoreByName = new Map(projectScores.value.map(p => [p.project_name, p]))
+  const names = new Set([
+    ...allProjects.value.map(p => p.name || p.project_name).filter(Boolean),
+    ...projectScores.value.map(p => p.project_name)
+  ])
+  const ordered = [...names].sort((a, b) => a.localeCompare(b, 'zh-Hans-CN'))
+
+  const headers = ['序号', '项目名称', '项目总分', ...LIZHI_MODULES.map(m => `${m}得分`)]
+  const rows = ordered.map((name, idx) => {
+    const p = scoreByName.get(name)
+    return [
+      idx + 1,
+      name,
+      p?.latest_score ?? '',
+      ...LIZHI_MODULES.map(m => p?.modules?.[m] ?? '')
+    ]
+  })
+  const data = buildSheet(headers, rows)
+  const ts = new Date().toISOString().slice(0, 10)
+  saveExcel(data, `砺质礼韵专项得分表_${ts}.xlsx`, '礼韵专项得分')
 }
 
 // ==================== 导出：图表 ====================

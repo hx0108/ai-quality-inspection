@@ -19,6 +19,7 @@
       <button class="set-tab" :class="{ on: activeTab === 'projects' }" @click="activeTab = 'projects'">项目管理</button>
       <button class="set-tab" :class="{ on: activeTab === 'backup' }" @click="activeTab = 'backup'">数据备份</button>
       <button class="set-tab" :class="{ on: activeTab === 'apikeys' }" @click="activeTab = 'apikeys'">AI模型配置</button>
+      <button class="set-tab" :class="{ on: activeTab === 'standards' }" @click="onOpenStandards">检查标准</button>
     </div>
 
     <!-- ==================== 用户管理 ==================== -->
@@ -320,6 +321,69 @@
       </template>
     </el-dialog>
 
+    <!-- ==================== 检查标准 ==================== -->
+    <div class="set-panel" :class="{ on: activeTab === 'standards' }">
+      <!-- 导入区 -->
+      <div class="card std-import-card">
+        <div class="std-import-title">导入检查标准</div>
+        <div class="std-import-desc">
+          支持 Excel（.xlsx）与 Word（.docx）。规范表格自动识别：每模块一个工作表，或首列为「行动主题」的单表（月度行动标准）；不规则文档由 AI 解析结构。
+        </div>
+        <div class="std-import-form">
+          <input ref="stdFileRef" type="file" accept=".xlsx,.docx" class="std-file-hidden" @change="onStdFileChange" />
+          <button class="btn" @click="stdFileRef?.click()">选择文件</button>
+          <span class="std-file-name" :class="{ empty: !stdForm.file }">{{ stdForm.file ? stdForm.file.name : '未选择文件' }}</span>
+          <input class="std-label-input" v-model="stdForm.label" placeholder="标准名称（如：砺质行动检查标准·9月）" />
+          <select class="std-model-sel" v-model="stdForm.scoring_model">
+            <option value="auto">计分方式：自动识别</option>
+            <option value="point_cap">封顶制（按分值封顶）</option>
+            <option value="weighted_5pt">权重制（5分×权重）</option>
+          </select>
+          <button class="btn btn-primary" style="margin-left:auto" :disabled="!stdForm.file || importingStd" @click="onImportStandard">
+            {{ importingStd ? '解析中…' : '导入标准' }}
+          </button>
+        </div>
+        <div v-if="importPreview" class="std-preview">
+          <div class="std-preview-ok">
+            已识别 {{ importPreview.module_count }} 个模块 / {{ importPreview.items_total }} 个检查项（{{ importPreview.scoring_model === 'point_cap' ? '封顶制' : '权重制' }}），创建任务时即可选择「{{ importPreview.label }}」
+          </div>
+          <div class="std-preview-mods">
+            <span v-for="m in importPreview.modules" :key="m.name" class="ktag" :class="m.role === 'deduction' ? 'ktag-err' : 'ktag-brand'">
+              {{ m.name }} · {{ m.item_count }}项{{ m.role === 'deduction' ? ' · 扣分' : '' }}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 标准列表 -->
+      <div class="card">
+        <table class="tbl">
+          <thead>
+            <tr>
+              <th>名称</th><th>类型</th><th>计分方式</th><th class="ctr">模块</th><th class="ctr">检查项</th><th>来源文件</th><th>导入时间</th><th class="ctr">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-if="stdLoading"><td colspan="8" style="text-align:center;padding:40px;color:var(--ink-400)">加载中...</td></tr>
+            <tr v-else-if="!standards.length"><td colspan="8" style="text-align:center;padding:40px;color:var(--ink-400)">暂无检查标准</td></tr>
+            <tr v-for="s in standards" :key="s.standard_type">
+              <td style="font-weight:600">{{ s.label }}</td>
+              <td><span class="ktag" :class="s.is_custom ? 'ktag-brand' : 'ktag-muted'">{{ s.is_custom ? '导入' : '内置' }}</span></td>
+              <td>{{ s.scoring_model === 'point_cap' ? '封顶制' : '权重制' }}</td>
+              <td class="ctr">{{ s.module_count }}</td>
+              <td class="ctr">{{ s.items_total ?? '—' }}</td>
+              <td style="color:var(--ink-500)">{{ s.source_filename || '—' }}</td>
+              <td style="color:var(--ink-500)">{{ s.created_at || '—' }}</td>
+              <td class="ctr">
+                <button v-if="s.is_custom" class="act act-err" @click="onDeleteStandard(s)">删除</button>
+                <span v-else style="color:var(--ink-300)">—</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- 修改密码弹窗 -->
     <el-dialog v-model="changeMyPwdVisible" title="修改密码" width="400px" class="styled-dialog">
       <el-form label-width="80px">
@@ -346,6 +410,7 @@ import { getAllProjects, createProject, updateProject, deleteProject } from '../
 import { getBackupStatus, listBackups, createBackup, restoreBackup, deleteBackup as deleteBackupApi } from '../../api/backup'
 import { changePassword } from '../../api/auth'
 import { getApiKeys, updateApiKey } from '../../api/settings'
+import { getStandardList, importStandard, deleteStandard } from '../../api/standards'
 
 const activeTab = ref('users')
 
@@ -643,6 +708,80 @@ onMounted(() => {
   fetchApiKeys()
 })
 
+// ==================== 检查标准 ====================
+const stdFileRef = ref(null)
+const stdForm = ref({ file: null, label: '', scoring_model: 'auto' })
+const importingStd = ref(false)
+const importPreview = ref(null)
+const standards = ref([])
+const stdLoading = ref(false)
+
+const onOpenStandards = () => {
+  activeTab.value = 'standards'
+  fetchStandards()
+}
+
+const onStdFileChange = (e) => {
+  const f = e.target.files?.[0]
+  if (!f) return
+  if (!/\.(xlsx|docx)$/i.test(f.name)) {
+    ElMessage.error('仅支持 .xlsx 或 .docx 文件')
+    e.target.value = ''
+    return
+  }
+  stdForm.value.file = f
+  if (!stdForm.value.label) {
+    stdForm.value.label = f.name.replace(/\.(xlsx|docx)$/i, '')
+  }
+}
+
+const fetchStandards = async () => {
+  stdLoading.value = true
+  try {
+    const res = await getStandardList()
+    standards.value = res.items || []
+  } catch (e) {
+    console.error('获取检查标准列表失败:', e)
+  } finally {
+    stdLoading.value = false
+  }
+}
+
+const onImportStandard = async () => {
+  if (!stdForm.value.file) return
+  importingStd.value = true
+  importPreview.value = null
+  try {
+    const fd = new FormData()
+    fd.append('file', stdForm.value.file)
+    fd.append('label', stdForm.value.label || stdForm.value.file.name.replace(/\.(xlsx|docx)$/i, ''))
+    fd.append('scoring_model', stdForm.value.scoring_model)
+    const res = await importStandard(fd)
+    importPreview.value = res
+    ElMessage.success(`导入成功：${res.module_count} 个模块 / ${res.items_total} 个检查项`)
+    stdForm.value = { file: null, label: '', scoring_model: 'auto' }
+    if (stdFileRef.value) stdFileRef.value.value = ''
+    fetchStandards()
+  } catch (e) {
+    ElMessage.error(e.response?.data?.detail || '导入失败：无法识别该文件的标准结构')
+  } finally {
+    importingStd.value = false
+  }
+}
+
+const onDeleteStandard = async (s) => {
+  try {
+    await ElMessageBox.confirm(`确定删除「${s.label}」？正被检查任务使用的标准不可删除。`, '删除检查标准', { type: 'warning' })
+  } catch { return }
+  try {
+    await deleteStandard(s.standard_type)
+    ElMessage.success('已删除')
+    fetchStandards()
+  } catch (e) {
+    ElMessage.error(e.response?.data?.detail || '删除失败')
+  }
+}
+
 // ==================== AI 模型配置 ====================
 const apiKeys = ref([])
 const apiKeysLoading = ref(false)
@@ -739,6 +878,102 @@ const onSaveApiKey = async () => {
 /* ==================== Panel toggle ==================== */
 .set-panel {
   display: none;
+}
+
+/* ===== 检查标准导入 ===== */
+.std-import-card {
+  padding: 16px 18px;
+  margin-bottom: 14px;
+}
+
+.std-import-title {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--ink-900);
+}
+
+.std-import-desc {
+  font-size: 12.5px;
+  color: var(--ink-500);
+  margin-top: 5px;
+  line-height: 1.7;
+}
+
+.std-import-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 13px;
+  flex-wrap: wrap;
+}
+
+.std-file-hidden {
+  display: none;
+}
+
+.std-file-name {
+  font-size: 12.5px;
+  color: var(--ink-700);
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.std-file-name.empty {
+  color: var(--ink-400);
+}
+
+.std-label-input {
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--ink-200);
+  border-radius: var(--r);
+  background: var(--bg-card);
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-900);
+  outline: none;
+  min-width: 260px;
+  flex: 1;
+}
+
+.std-label-input:focus {
+  border-color: var(--blue);
+  box-shadow: var(--focus-ring);
+}
+
+.std-model-sel {
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--ink-200);
+  border-radius: var(--r);
+  background: var(--bg-card);
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-800);
+  outline: none;
+}
+
+.std-preview {
+  margin-top: 13px;
+  padding: 12px 14px;
+  background: var(--ok-bg);
+  border: 1px solid #b9e2cc;
+  border-radius: var(--r);
+}
+
+.std-preview-ok {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ok-strong);
+}
+
+.std-preview-mods {
+  display: flex;
+  gap: 6px;
+  margin-top: 9px;
+  flex-wrap: wrap;
 }
 
 .set-panel.on {

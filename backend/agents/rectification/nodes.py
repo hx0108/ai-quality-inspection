@@ -164,6 +164,20 @@ async def judge_result(state: Dict[str, Any]) -> Dict[str, Any]:
         state["final_status"] = "ai_rejected"
         logger.warning(f"[Rectification] 判定驳回: {rect_id}, score={confidence}, round={round_number}")
 
+    # Jev active 模式：校准概率低或与视觉模型结论冲突 → 降级为人工复核（只降不升）
+    if settings.JEV_MODE == "active":
+        jev = (state.get("ai_result") or {}).get("jev") or {}
+        if jev and state.get("final_status") == "ai_approved":
+            verdict_p = jev.get("verdict_p")
+            low_p = isinstance(verdict_p, (int, float)) and verdict_p < settings.JEV_REVIEW_THRESHOLD
+            if low_p or jev.get("agreement") is False:
+                state["final_status"] = "pending_review"
+                jev["routing"] = "downgraded_to_review"
+                logger.info(
+                    f"[Rectification] Jev 降级为人工复核: {rect_id}, "
+                    f"verdict_p={verdict_p}, agreement={jev.get('agreement')}"
+                )
+
     return state
 
 

@@ -236,6 +236,7 @@ import { useAuthStore } from '../../stores/auth'
 import MobileUserSheet from '../../components/MobileUserSheet.vue'
 import MobileTabbar from '../../components/MobileTabbar.vue'
 import { getMyTasks, getProjects, createTask } from '../../api/tasks'
+import { getStandardList } from '../../api/standards'
 import { createRecord } from '../../api/inspection'
 import { getScoringStatus, getModuleScoringStatus } from '../../api/scoring'
 
@@ -346,12 +347,17 @@ const fetchProjects = async () => {
   }
 }
 
-const fetchStandardTypesList = () => {
-  standardTypes.value = [
-    { value: 'diecheng', label: '蝶城版' },
-    { value: 'feidiecheng', label: '非蝶城版' },
-    { value: 'lizhi', label: '砺质版' }
-  ]
+const fetchStandardTypesList = async () => {
+  try {
+    const res = await getStandardList()
+    standardTypes.value = (res.items || []).map(s => ({ value: s.standard_type, label: s.label }))
+  } catch (e) {
+    standardTypes.value = [
+      { value: 'diecheng', label: '蝶城版' },
+      { value: 'feidiecheng', label: '非蝶城版' },
+      { value: 'lizhi', label: '砺质版' }
+    ]
+  }
 }
 
 const onModuleClick = async (taskId, mod) => {

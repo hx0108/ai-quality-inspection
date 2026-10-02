@@ -57,7 +57,10 @@ def load_template_items(module_name: str, standard_type: str = "diecheng") -> Li
     cache_key = f"{standard_type}:{module_name}"
     std_config = STANDARD_TYPES.get(standard_type)
     if not std_config:
-        return []
+        # 自定义标准（检查标准导入功能生成）
+        std_config = stds.get_custom_config(standard_type)
+        if not std_config:
+            return []
 
     template_path = settings.TEMPLATES_DIR / std_config["file"]
     if not os.path.exists(template_path):
@@ -97,9 +100,11 @@ def load_template_items(module_name: str, standard_type: str = "diecheng") -> Li
         ws = wb[sheet_name]
         items = []
 
-        # 砺质标准：列布局为 A检查内容 / B检查要求 / C评分标准 / D max_score（无权重列）
-        is_lizhi = (standard_type == "lizhi")
-        is_deduction_module = stds.is_deduction_module(standard_type, sheet_name) if is_lizhi else False
+        # 封顶制布局：列布局为 A检查内容 / B检查要求 / C评分标准 / D max_score（无权重列）
+        # （内置砺质 + 所有 point_cap 类自定义标准）
+        scoring_model = std_config.get("scoring_model") or stds.get_scoring_model(standard_type)
+        use_cap_layout = scoring_model == "point_cap" or standard_type == "lizhi"
+        is_deduction_module = stds.is_deduction_module(standard_type, sheet_name) if use_cap_layout else False
 
         for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=1):
             if not row[0]:  # 检查点为空则跳过
@@ -107,7 +112,7 @@ def load_template_items(module_name: str, standard_type: str = "diecheng") -> Li
 
             item_id = f"{sheet_name[:2]}-{row_idx:03d}"
 
-            if is_lizhi:
+            if use_cap_layout:
                 check_req = str(row[1]) if len(row) > 1 and row[1] else ""
                 max_score = float(row[3]) if len(row) > 3 and row[3] not in (None, "") else (
                     stds.get_module_max_score(standard_type, sheet_name) or 0
