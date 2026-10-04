@@ -901,13 +901,62 @@ onUnmounted(() => {
   text-decoration: none;
 }
 
-@media (min-width: 700px) {
+/* ===== 桌面端（≥900px）：左品牌面板 + 右表单的双栏卡片 ===== */
+@media (min-width: 900px) {
+  .login-page {
+    box-sizing: border-box;
+    min-height: 100vh;
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(430px, 470px);
+    grid-template-rows: minmax(0, 1fr) auto;
+    align-content: center;
+    justify-content: center;
+    width: min(1120px, 100%);
+    height: min(720px, 100vh);
+    margin: auto;
+    border: 1px solid var(--ink-200);
+    border-radius: 18px;
+    overflow: hidden;
+    box-shadow: var(--shadow-overlay);
+    background: var(--bg-card);
+  }
+
   .hero {
-    padding: 40px 32px 44px;
+    grid-column: 1;
+    grid-row: 1;
+    height: 100%;
+    padding: 48px 44px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .hero-line {
+    margin-top: auto; /* 标题沉底，品牌居上（桌面视觉） */
+    font-size: 26px;
+  }
+
+  .hero-sub {
+    font-size: 13.5px;
   }
 
   .form-wrap {
-    padding-top: 28px;
+    grid-column: 2;
+    grid-row: 1;
+    align-self: center;
+    max-width: none;
+    width: 100%;
+    padding: 8px 44px 16px;
+  }
+
+  .footer {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    flex-direction: row;
+    justify-content: center;
+    gap: 14px;
+    background: var(--bg-card);
+    border-top: 1px solid var(--ink-100);
+    padding: 12px 0 16px;
   }
 }
 </style>

@@ -230,9 +230,11 @@ function isMobile() {
 }
 
 // 移动端路由标记：桌面宽屏下把移动页收进居中手机栏（样式见 App.vue 全局块）
+// /login 为 PC/移动共用路由：桌面走登录页自身的双栏布局，不参与收窄
 router.afterEach((to) => {
   const isPcRoute = to.path.startsWith('/pc')
-  document.body.classList.toggle('mobile-route', !isPcRoute)
+  const isSharedAuth = to.path === '/login'
+  document.body.classList.toggle('mobile-route', !isPcRoute && !isSharedAuth)
 })
 
 export default router
