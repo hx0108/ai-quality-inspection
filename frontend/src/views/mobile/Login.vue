@@ -1,6 +1,7 @@
 <template>
   <div class="login-page">
-    <!-- 品牌头（原型 MLogin 结构） -->
+    <div class="login-shell">
+    <!-- 品牌头（青绿渐变，原型 MLogin 结构） -->
     <div class="hero">
       <div class="hero-brand">
         <div class="brand-mark">
@@ -13,6 +14,20 @@
       </div>
       <h1 class="hero-line">现场检查，AI 评分</h1>
       <p class="hero-sub">拍照留证 · 离线可用 · 自动生成报告与整改闭环</p>
+      <ul class="hero-feats">
+        <li>
+          <span class="feat-ico"><van-icon name="photograph" /></span>
+          <div><b>拍照留证</b><span>时间地点水印，责任可溯</span></div>
+        </li>
+        <li>
+          <span class="feat-ico"><van-icon name="description" /></span>
+          <div><b>离线可用</b><span>弱网地库照常执行检查</span></div>
+        </li>
+        <li>
+          <span class="feat-ico"><van-icon name="replay" /></span>
+          <div><b>闭环管理</b><span>评分、报告、整改一体</span></div>
+        </li>
+      </ul>
     </div>
 
     <!-- 表单区 -->
@@ -156,6 +171,7 @@
         </span>
       </div>
     </div>
+    </div><!-- /login-shell -->
 
     <footer class="footer">
       <span>登录即代表同意相关条款 · © 2026 智能品质检查系统</span>
@@ -510,6 +526,9 @@ onUnmounted(() => {
   opacity: 0.78;
   line-height: 1.6;
 }
+
+/* 特性清单仅桌面展示（移动端保持已批准原型） */
+.hero-feats { display: none; }
 
 /* ===== 表单区 ===== */
 .form-wrap {
@@ -901,62 +920,276 @@ onUnmounted(() => {
   text-decoration: none;
 }
 
-/* ===== 桌面端（≥900px）：左品牌面板 + 右表单的双栏卡片 ===== */
+/* ===== 桌面端（≥900px）：深色沉浸式登录（呼应系统深色侧栏） ===== */
 @media (min-width: 900px) {
   .login-page {
+    position: relative;
     box-sizing: border-box;
     min-height: 100vh;
     display: grid;
-    grid-template-columns: minmax(0, 1.05fr) minmax(430px, 470px);
-    grid-template-rows: minmax(0, 1fr) auto;
-    align-content: center;
-    justify-content: center;
-    width: min(1120px, 100%);
-    height: min(720px, 100vh);
-    margin: auto;
-    border: 1px solid var(--ink-200);
-    border-radius: 18px;
+    place-items: center;
+    background: #0e0e14;
     overflow: hidden;
-    box-shadow: var(--shadow-overlay);
-    background: var(--bg-card);
+    isolation: isolate;
   }
 
+  /* 氛围：品牌光晕（左上）+ 次级光晕（右下） */
+  .login-page::before {
+    content: "";
+    position: absolute;
+    inset: -20%;
+    z-index: -2;
+    background:
+      radial-gradient(880px 620px at 16% 6%, rgba(20, 160, 148, 0.30), transparent 62%),
+      radial-gradient(720px 520px at 88% 94%, rgba(15, 138, 128, 0.16), transparent 58%);
+  }
+
+  /* 质感：细网格 + 噪点，边缘渐隐 */
+  .login-page::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+    background-size: 56px 56px;
+    -webkit-mask-image: radial-gradient(78% 78% at 50% 38%, #000 25%, transparent 100%);
+    mask-image: radial-gradient(78% 78% at 50% 38%, #000 25%, transparent 100%);
+  }
+
+  /* 玻璃拟态双栏卡片 */
+  .login-shell {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: 1.1fr 430px;
+    width: min(1040px, calc(100% - 48px));
+    min-height: 600px;
+    background: rgba(24, 24, 32, 0.66);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 22px;
+    box-shadow:
+      0 48px 140px rgba(0, 0, 0, 0.55),
+      inset 0 1px 0 rgba(255, 255, 255, 0.07);
+    backdrop-filter: blur(20px);
+    overflow: hidden;
+  }
+
+  /* 品牌面板 */
   .hero {
-    grid-column: 1;
-    grid-row: 1;
-    height: 100%;
-    padding: 48px 44px;
+    position: relative;
+    padding: 44px 42px 38px;
     display: flex;
     flex-direction: column;
+    background: linear-gradient(165deg, rgba(20, 160, 148, 0.16), rgba(12, 113, 104, 0.05) 55%, transparent);
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .hero::after {
+    content: "";
+    position: absolute;
+    right: -140px;
+    bottom: -180px;
+    width: 420px;
+    height: 420px;
+    border-radius: 50%;
+    border: 1px solid rgba(43, 184, 170, 0.22);
+    box-shadow: 0 0 80px rgba(43, 184, 170, 0.12) inset;
+  }
+
+  .hero-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .brand-mark {
+    width: 44px;
+    height: 44px;
+    border-radius: 13px;
+    background: rgba(43, 184, 170, 0.18);
+    border: 1px solid rgba(43, 184, 170, 0.4);
+    box-shadow: 0 0 24px rgba(43, 184, 170, 0.25);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+  }
+
+  .brand-name {
+    font-size: 17px;
+    font-weight: 800;
+    color: #f2f6f5;
+    letter-spacing: 0.3px;
+  }
+
+  .brand-sub {
+    margin-top: 2px;
+    font-size: 10.5px;
+    color: rgba(255, 255, 255, 0.45);
+    letter-spacing: 1.6px;
   }
 
   .hero-line {
-    margin-top: auto; /* 标题沉底，品牌居上（桌面视觉） */
-    font-size: 26px;
+    margin: auto 0 0; /* 品牌居上，标题沉底 */
+    font-size: 34px;
+    font-weight: 800;
+    color: #f5f8f7;
+    letter-spacing: -0.5px;
+    line-height: 1.25;
   }
 
   .hero-sub {
+    margin: 12px 0 0;
     font-size: 13.5px;
+    color: rgba(255, 255, 255, 0.62);
+    line-height: 1.7;
   }
 
-  .form-wrap {
-    grid-column: 2;
-    grid-row: 1;
-    align-self: center;
-    max-width: none;
-    width: 100%;
-    padding: 8px 44px 16px;
+  /* 特性清单（桌面专属） */
+  .hero-feats {
+    list-style: none;
+    margin: 36px 0 0;
+    padding: 28px 0 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    display: grid;
+    gap: 18px;
   }
 
-  .footer {
-    grid-column: 1 / -1;
-    grid-row: 2;
-    flex-direction: row;
+  .hero-feats li {
+    display: flex;
+    align-items: flex-start;
+    gap: 13px;
+  }
+
+  .feat-ico {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: rgba(43, 184, 170, 0.14);
+    border: 1px solid rgba(43, 184, 170, 0.32);
+    color: #6fd3c8;
+    display: flex;
+    align-items: center;
     justify-content: center;
-    gap: 14px;
-    background: var(--bg-card);
-    border-top: 1px solid var(--ink-100);
-    padding: 12px 0 16px;
+    font-size: 17px;
   }
+
+  .hero-feats b {
+    display: block;
+    font-size: 13.5px;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.92);
+  }
+
+  .hero-feats div > span {
+    display: block;
+    margin-top: 2px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.5);
+  }
+
+  /* 表单区（深色） */
+  .form-wrap {
+    padding: 48px 42px 28px;
+    background: rgba(14, 14, 20, 0.55);
+    border-left: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .mode-tabs {
+    display: flex;
+    gap: 22px;
+    padding: 0 2px 14px;
+  }
+
+  .mode-tab {
+    border: none;
+    background: none;
+    padding: 0 2px 8px;
+    font-size: 16px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.4);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s;
+  }
+
+  .mode-tab.on {
+    font-weight: 800;
+    color: #fff;
+    border-bottom-color: #2bb8aa;
+  }
+
+  .the-form { display: grid; gap: 12px; }
+
+  .field-wrapper {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+
+  .field-wrapper:focus-within {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: #2bb8aa;
+    box-shadow: 0 0 0 3px rgba(43, 184, 170, 0.18);
+  }
+
+  .field-icon { color: rgba(255, 255, 255, 0.35); }
+  .field-wrapper:focus-within .field-icon { color: #2bb8aa; }
+
+  .field-wrapper :deep(.van-field__control) {
+    color: #f2f6f5;
+    font-size: 14.5px;
+    caret-color: #2bb8aa;
+  }
+
+  .field-wrapper :deep(.van-field__control::placeholder) {
+    color: rgba(255, 255, 255, 0.32);
+  }
+
+  .field-wrapper :deep(.van-field__right-icon) {
+    color: rgba(255, 255, 255, 0.35);
+  }
+
+  .form-extra { margin: 2px 2px 6px; }
+
+  .checkbox-text { color: rgba(255, 255, 255, 0.55); }
+
+  .submit-btn {
+    background: linear-gradient(135deg, #14a094, #0c7168) !important;
+    border: none !important;
+    box-shadow: 0 10px 30px rgba(15, 138, 128, 0.35) !important;
+  }
+
+  .submit-btn:hover { filter: brightness(1.08); }
+
+  .agreement-row { margin-top: 14px; color: rgba(255, 255, 255, 0.4); }
+  .agreement-row button { color: #5ecfc4; }
+
+  .reg-note {
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.5);
+  }
+  .reg-note .van-icon { color: rgba(255, 255, 255, 0.4); }
+
+  .project-tag {
+    background: rgba(43, 184, 170, 0.14);
+    color: #7fd6cb;
+  }
+  .project-tag em { background: #2bb8aa; }
+
+  .reg-note, .project-placeholder { color: rgba(255, 255, 255, 0.4); }
+  .field-arrow { color: rgba(255, 255, 255, 0.35); }
+
+  /* 页脚（深色） */
+  .footer {
+    position: relative;
+    z-index: 1;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.32);
+  }
+
+  .footer a { color: rgba(255, 255, 255, 0.32); text-decoration: none; }
 }
 </style>
