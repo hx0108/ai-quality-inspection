@@ -4,10 +4,10 @@
 
     <template v-else>
       <!-- 页面头部 -->
-      <div class="phdr">
+      <div class="phdr phdr-dash">
         <div>
-          <h1>AI效果评估看板</h1>
-          <div class="phdr-sub">AI评分准确性、可靠性、公平性实时监控</div>
+          <h1>效果评估</h1>
+          <div class="phdr-sub">AI 评分准确性、可靠性与公平性实时监控</div>
         </div>
       </div>
 
@@ -380,23 +380,27 @@ function renderConfidencePie() {
 
 function renderModuleBar() {
   if (!moduleBarRef.value || moduleStats.value.length === 0) return
-  moduleBarChart = echarts.init(moduleBarRef.value)
   const sorted = [...moduleStats.value].sort((a, b) => a.consistency_rate - b.consistency_rate)
+  // 高度随模块数自适应，避免条形拥挤
+  moduleBarRef.value.style.height = Math.max(260, sorted.length * 40) + 'px'
+  moduleBarChart = echarts.init(moduleBarRef.value)
   // 一致率是单一度量：语义色编码（<90% 关注，其余品牌色），不再用彩虹色区分模块
   moduleBarChart.setOption({
     tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-    grid: { top: 10, bottom: 30, left: 100, right: 40 },
+    grid: { top: 10, bottom: 30, left: 100, right: 60 },
     xAxis: { type: 'value', max: 100, axisLabel: { formatter: '{value}%', fontSize: 11 } },
     yAxis: { type: 'category', data: sorted.map(m => m.module_name), axisLabel: { fontSize: 12 } },
     series: [{
-      type: 'bar', barWidth: 18,
+      type: 'bar', barMaxWidth: 16, barCategoryGap: '45%',
       data: sorted.map((m) => ({
         value: m.consistency_rate,
         itemStyle: {
           color: m.consistency_rate < 90 ? '#b07a12' : '#0f8a80',
-          borderRadius: [0, 4, 4, 0],
+          borderRadius: 12,
         },
       })),
+      showBackground: true,
+      backgroundStyle: { color: '#eef0f4', borderRadius: 12 },
       label: { show: true, position: 'right', formatter: '{c}%', fontSize: 11, color: '#61616d' },
     }],
   })
@@ -405,8 +409,10 @@ function renderModuleBar() {
 function renderRadarChart() {
   if (!radarChartRef.value) return
   if (radarChart) radarChart.dispose()
-  radarChart = echarts.init(radarChartRef.value)
   const moduleDevs = biasData.value.module_deviations || []
+  // 高度随模块数自适应，避免条形拥挤
+  radarChartRef.value.style.height = Math.max(240, moduleDevs.length * 38) + 'px'
+  radarChart = echarts.init(radarChartRef.value)
 
   if (moduleDevs.length === 0) {
     radarChart.setOption({
@@ -425,14 +431,14 @@ function renderRadarChart() {
         return `${m.module_name}<br/>偏差: ${m.deviation}<br/>编辑率: ${m.edit_rate}%`
       },
     },
-    grid: { top: 10, bottom: 30, left: 100, right: 40 },
+    grid: { top: 10, bottom: 30, left: 100, right: 60 },
     xAxis: { type: 'value', axisLabel: { fontSize: 11 } },
     yAxis: { type: 'category', data: sorted.map(m => m.module_name), axisLabel: { fontSize: 12 } },
     series: [{
-      type: 'bar', barWidth: 18,
+      type: 'bar', barMaxWidth: 16, barCategoryGap: '45%',
       data: sorted.map((m, idx) => ({
         value: m.deviation,
-        itemStyle: { color: idx === 0 ? '#e5484d' : '#c9c9d1', borderRadius: [0, 4, 4, 0] },
+        itemStyle: { color: idx === 0 ? '#e5484d' : '#c9c9d1', borderRadius: 12 },
       })),
       label: { show: true, position: 'right', formatter: '{c}', fontSize: 11, color: '#61616d' },
     }],
@@ -798,4 +804,48 @@ onUnmounted(() => {
   background: var(--bg-card); border: 1px solid var(--ink-100);
   padding: 1px 7px; border-radius: 4px; color: var(--ink-600);
 }
+
+/* ===== REF-DASH 参考图仪表盘语法 ===== */
+.phdr-dash { align-items: flex-end; margin-bottom: 26px; }
+.phdr-dash h1 { font-size: 30px; font-weight: 800; letter-spacing: -0.8px; }
+.phdr-dash .phdr-sub { font-size: 14px; margin-top: 6px; }
+.phdr-dash .phdr-acts { margin-left: auto; }
+
+.ai-metrics-page .kpi-row,
+.aimetrics-page .kpi-row {
+  display: flex;
+  background: transparent;
+  gap: 0;
+  margin-bottom: 24px;
+}
+.ai-metrics-page .kpi,
+.aimetrics-page .kpi {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border: none;
+  border-left: 1px solid var(--ink-200);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 2px 0 2px 26px;
+  animation: none;
+}
+.ai-metrics-page .kpi:first-child,
+.aimetrics-page .kpi:first-child { border-left: none; padding-left: 0; }
+.ai-metrics-page .kpi-lbl { order: 2; font-size: 13px; margin-top: 8px; }
+.ai-metrics-page .kpi-num { order: 1; font-size: 38px; letter-spacing: -1.2px; }
+.ai-metrics-page .kpi-tags { order: 3; margin-top: 8px; }
+
+.ai-metrics-page .card {
+  border-radius: 20px;
+  border: 1px solid var(--ink-100);
+  box-shadow: 0 1px 2px rgba(16, 40, 36, 0.04), 0 14px 36px -14px rgba(16, 40, 36, 0.10);
+}
+.ai-metrics-page .card-h { padding: 18px 22px 0; border-bottom: none; }
+.ai-metrics-page .card-t { font-size: 16px; }
+.ai-metrics-page .charts { gap: 18px; margin-bottom: 18px; }
+.ai-metrics-page .chart-area { padding: 6px 14px 10px; }
+
 </style>
