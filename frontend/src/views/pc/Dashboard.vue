@@ -1,5 +1,5 @@
 <template>
-  <div class="dashboard-page">
+  <div class="dashboard-page dash-premium">
     <div v-if="loading" class="loading-wrap">
       <el-skeleton :rows="5" animated />
     </div>
@@ -8,11 +8,12 @@
       <!-- 页面标题 -->
       <div class="phdr">
         <div>
-          <h1>数据概览</h1>
-          <div class="phdr-sub">物业品质检查核心指标一览</div>
+          <div class="eyebrow">Overview · 数据概览</div>
+          <h1>品质<span class="g-text">总览</span></h1>
+          <div class="phdr-sub">组合品质体检 · 更新于今日</div>
         </div>
         <div class="phdr-acts">
-          <button class="btn" @click="exportAllData" :disabled="exportingAll">
+          <button class="btn btn-dark" @click="exportAllData" :disabled="exportingAll">
             <svg viewBox="0 0 16 16"><path d="M2 3v10h12M8 7v6M5 10l3 3 3-3M2 3l3 3" /></svg>
             {{ exportingAll ? '导出中...' : '导出全部报表' }}
           </button>
@@ -457,12 +458,13 @@ const exportAllData = async () => {
 // ==================== 主页数据加载 ====================
 const fetchStats = async () => {
   loading.value = true
+  let rectRaw = []
   try {
     const res = await getDashboardStats()
     summary.value = res.summary || {}
     projectScores.value = res.project_latest_scores || []
     issueByModule.value = res.issue_by_module || []
-    projectRectStats.value = res.project_rectification_stats || []
+    rectRaw = res.project_rectification_stats || []
     coverageDetail.value = res.coverage_detail || { checked_projects: [], unchecked_projects: [] }
 
     // 预加载项目列表（供筛选器使用）
@@ -470,6 +472,14 @@ const fetchStats = async () => {
       const projRes = await getProjects()
       allProjects.value = projRes.items || []
     } catch (e) { /* ignore */ }
+
+    // 补齐零整改项目：全量项目都应出现在「各项目整改完成率」中
+    const have = new Set(rectRaw.map(r => r.project_name))
+    const missing = allProjects.value
+      .map(p => p.name)
+      .filter(n => n && !have.has(n))
+      .map(n => ({ project_name: n, approved: 0, pending: 0, total: 0, rate: 0 }))
+    projectRectStats.value = [...rectRaw, ...missing]
   } catch (e) {
     console.error('获取仪表盘数据失败:', e)
   } finally {
@@ -574,10 +584,13 @@ const renderModuleChart = () => {
         value: i.count,
         itemStyle: {
           color: RAMP[idx % RAMP.length],
-          borderRadius: [0, 4, 4, 0]
+          borderRadius: 12
         }
       })),
-      barWidth: 18,
+      barCategoryGap: '45%',
+      barMaxWidth: 18,
+      showBackground: true,
+      backgroundStyle: { color: '#eef0f4', borderRadius: 12 },
       label: { show: true, position: 'right', fontSize: 12, fontWeight: 600, color: '#61616d' },
       emphasis: {
         itemStyle: { shadowBlur: 6, shadowColor: 'rgba(22,22,28,0.1)' }
@@ -588,8 +601,12 @@ const renderModuleChart = () => {
 
 const renderRectChart = () => {
   if (!rectChartRef.value || !projectRectStats.value.length) return
+  // 高度随项目数自适应，避免横条拥挤
+  rectChartRef.value.style.height = Math.max(300, projectRectStats.value.length * 38) + 'px'
   if (!rectChart) {
     rectChart = echarts.init(rectChartRef.value)
+  } else {
+    rectChart.resize()
   }
   const data = [...projectRectStats.value].reverse()
   rectChart.setOption({
@@ -654,7 +671,7 @@ const renderRectChart = () => {
         data: data.map(i => i.pending),
         itemStyle: {
           color: SEMANTIC.neutral,
-          borderRadius: [0, 4, 4, 0]
+          borderRadius: [0, 12, 12, 0]
         },
         barWidth: 18,
         emphasis: { itemStyle: { shadowBlur: 6, shadowColor: 'rgba(22,22,28,0.15)' } }
@@ -1173,4 +1190,25 @@ onUnmounted(() => {
 @media (max-width: 900px) {
   .phdr { flex-direction: column; align-items: flex-start; gap: 12px; }
 }
+
+/* ===== REF-DASH 参考图仪表盘语法 ===== */
+.dashboard-page .phdr h1 {
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.8px;
+}
+.dashboard-page .phdr { margin-bottom: 26px; }
+.dashboard-page .phdr-sub { font-size: 14px; margin-top: 6px; }
+
+/* 磁贴 */
+.dashboard-page .card {
+  border-radius: 20px;
+  border: 1px solid var(--ink-100);
+  box-shadow: 0 1px 2px rgba(16, 40, 36, 0.04), 0 14px 36px -14px rgba(16, 40, 36, 0.10);
+}
+.dashboard-page .card-h { padding: 18px 22px; border-bottom: 1px solid var(--ink-100); }
+.dashboard-page .card-t { font-size: 16px; }
+.dashboard-page .charts { gap: 18px; margin-top: 18px; }
+.dashboard-page .chart-area { padding: 6px 14px 10px; }
+.dashboard-page .module-table-wrap :deep(.el-table) { --el-table-border-color: var(--ink-100); }
 </style>

@@ -1,40 +1,29 @@
 <template>
-  <div class="llm-monitor-page">
+  <div class="llm-monitor-page dash-premium">
     <div v-if="loading" class="loading-wrap">
       <el-skeleton :rows="8" animated />
     </div>
 
     <template v-else>
       <!-- 页面标题 -->
-      <div class="phdr"><div>
-        <h1>AI 能力分析</h1>
-        <div class="phdr-sub">大模型调用量、效能与费用全览</div>
+      <div class="phdr phdr-dash"><div>
+        <div class="eyebrow">AI Engine · 模型监控</div>
+        <h1>模型<span class="g-text">监控台</span></h1>
+        <div class="phdr-sub">5 个 Agent 的大模型调用量、效能与费用全览</div>
+      </div>
+      <div class="phdr-acts">
+        <el-radio-group v-model="trendDays" size="default" @change="onDaysChange" class="range-pills">
+          <el-radio-button value="7">近7天</el-radio-button>
+          <el-radio-button value="30">近30天</el-radio-button>
+          <el-radio-button value="90">近90天</el-radio-button>
+        </el-radio-group>
+        <el-date-picker v-if="trendDays === 'custom'" v-model="customDateRange" type="daterange"
+          range-separator="至" start-placeholder="开始" end-placeholder="结束" size="default"
+          style="width: 240px" @change="onCustomDateChange" />
       </div></div>
 
-      <!-- 时间范围筛选 -->
-      <div class="filters">
-        <div class="radio-group">
-          <el-radio-group v-model="trendDays" size="default" @change="onDaysChange">
-            <el-radio-button value="7">近7天</el-radio-button>
-            <el-radio-button value="30">近30天</el-radio-button>
-            <el-radio-button value="90">近90天</el-radio-button>
-            <el-radio-button value="custom">自定义</el-radio-button>
-          </el-radio-group>
-          <el-date-picker
-            v-if="trendDays === 'custom'"
-            v-model="customDateRange"
-            type="daterange"
-            range-separator="至"
-            start-placeholder="开始日期"
-            end-placeholder="结束日期"
-            size="default"
-            style="margin-left: 8px; width: 240px;"
-            @change="onCustomDateChange"
-          />
-        </div>
-      </div>
-
-      <!-- KPI 指标卡片 -->
+      <!-- KPI 指标卡片（玻璃横条） -->
+      <div class="kstrip">
       <div class="kpi-row cols-5">
         <div class="kpi">
           <div class="kpi-lbl">本月调用（次）</div>
@@ -74,6 +63,7 @@
           </div>
         </div>
       </div>
+      </div><!-- /kstrip -->
 
       <!-- 失败记录提醒 -->
       <div class="failure-banner" v-if="failedRecordsCount > 0">
@@ -260,6 +250,13 @@
         <div class="card-h">
           <span class="card-t">调用记录明细</span>
           <span class="card-d">最近 API 调用详情</span>
+        </div>
+        <div style="padding: 14px 22px 0" v-if="records.length">
+          <div class="term">
+            <div v-for="(r, i) in records.slice(0, 4)" :key="i">
+              <b>{{ (r.timestamp || '').slice(11, 19) }}</b> · {{ r.model_name }} · {{ formatTokens((r.prompt_tokens || 0) + (r.completion_tokens || 0)) }} tok
+            </div>
+          </div>
         </div>
         <div class="card-body">
           <div class="table-filters">
@@ -620,11 +617,10 @@ const renderTrendChart = (trend) => {
           type: 'bar',
           data: calls,
           yAxisIndex: 0,
-          itemStyle: {
-            color: '#0f8a80',
-            borderRadius: [3, 3, 0, 0]
-          },
-          barMaxWidth: 20,
+          itemStyle: { color: '#0f8a80', borderRadius: 12 },
+          showBackground: true,
+          backgroundStyle: { color: '#eef0f4', borderRadius: 12 },
+          barMaxWidth: 26,
         },
         {
           name: 'Token消耗',
@@ -715,11 +711,10 @@ const renderDurationChart = async () => {
         series: [{
           type: 'bar',
           data: counts,
-          itemStyle: {
-            color: '#35a398',
-            borderRadius: [4, 4, 0, 0]
-          },
-          barWidth: 28,
+          itemStyle: { color: '#35a398', borderRadius: 12 },
+          showBackground: true,
+          backgroundStyle: { color: '#eef0f4', borderRadius: 12 },
+          barWidth: 30,
         }]
       })
     } catch (e) {
@@ -1064,4 +1059,66 @@ onUnmounted(() => {
 
 @media (max-width: 900px) {
 }
+
+/* ===== REF-DASH 参考图仪表盘语法 ===== */
+.phdr-dash {
+  align-items: flex-end;
+  margin-bottom: 26px;
+}
+.phdr-dash h1 {
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.8px;
+}
+.phdr-dash .phdr-sub {
+  font-size: 14px;
+  margin-top: 6px;
+}
+.phdr-dash .phdr-acts {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* KPI：超大数字 + 细线分隔（无卡片） */
+.llm-monitor-page .kpi-row {
+  display: flex;
+  background: transparent;
+  gap: 0;
+  margin-bottom: 24px;
+}
+.llm-monitor-page .kpi {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border: none;
+  border-left: 1px solid var(--ink-200);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 2px 0 2px 26px;
+  animation: none;
+}
+.llm-monitor-page .kpi:first-child {
+  border-left: none;
+  padding-left: 0;
+}
+.llm-monitor-page .kpi-lbl { order: 2; font-size: 13px; margin-top: 8px; }
+.llm-monitor-page .kpi-num { order: 1; font-size: 40px; letter-spacing: -1.2px; }
+.llm-monitor-page .kpi-unit { font-size: 15px; }
+.llm-monitor-page .kpi-tags { order: 3; margin-top: 8px; }
+
+/* 磁贴 */
+.llm-monitor-page .card {
+  border-radius: 20px;
+  border: 1px solid var(--ink-100);
+  box-shadow: 0 1px 2px rgba(16, 40, 36, 0.04), 0 14px 36px -14px rgba(16, 40, 36, 0.10);
+}
+.llm-monitor-page .card-h { padding: 18px 22px 0; border-bottom: none; }
+.llm-monitor-page .card-t { font-size: 16px; }
+.llm-monitor-page .charts, .llm-monitor-page .grid-2 { gap: 18px; margin-bottom: 18px; }
+.llm-monitor-page .chart-area { padding: 6px 14px 10px; }
+
 </style>

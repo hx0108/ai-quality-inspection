@@ -544,3 +544,73 @@
   .kpi-row.cols-3, .kpi-row.cols-4, .kpi-row.cols-5, .kpi-row.cols-6 { grid-template-columns: repeat(2, 1fr); }
   .phdr { flex-direction: column; align-items: flex-start; }
 }
+
+
+/* ===== Premium Dash（数据概览 / 模型监控 / 效果评估）===== */
+.dash-premium { position: relative; isolation: isolate; }
+.dash-premium::before {
+  content: ""; position: absolute; inset: 0; z-index: -2;
+  background:
+    radial-gradient(900px 520px at 86% -10%, rgba(20, 160, 148, 0.16), transparent 60%),
+    radial-gradient(700px 480px at -10% 112%, rgba(94, 212, 198, 0.16), transparent 58%);
+}
+.dash-premium::after {
+  content: ""; position: absolute; inset: 0; z-index: -1;
+  opacity: 0.5;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E");
+}
+.dash-premium .card {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 24px;
+  box-shadow: 0 1px 2px rgba(16, 40, 36, 0.04), 0 24px 60px -28px rgba(16, 40, 36, 0.25);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+.dash-premium .card-h { padding: 18px 22px; border-bottom: none; }
+.dash-premium .card-t { font-size: 16px; }
+.dash-premium .phdr { align-items: flex-end; margin-bottom: 28px; }
+.dash-premium .phdr h1 { font-size: 34px; font-weight: 800; letter-spacing: -1px; }
+.dash-premium .phdr-sub { font-size: 14px; margin-top: 8px; }
+.dash-premium .eyebrow {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 11px; font-weight: 800; letter-spacing: 0.16em;
+  color: var(--teal); text-transform: uppercase; margin-bottom: 12px;
+}
+.dash-premium .eyebrow::before { content: ""; width: 20px; height: 2px; background: var(--teal); border-radius: 2px; }
+.dash-premium .g-text {
+  background: linear-gradient(120deg, #14a094 15%, #0c7168 85%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.dash-premium .btn-dark {
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 42px; padding: 0 22px; border-radius: 999px;
+  background: var(--ink-900); color: #fff; font-size: 14px; font-weight: 600;
+  border: none; cursor: pointer; font-family: inherit;
+}
+.dash-premium .pills {
+  display: inline-flex; background: rgba(255, 255, 255, 0.65);
+  border: 1px solid rgba(23, 32, 30, 0.08); border-radius: 999px; padding: 3px;
+}
+.dash-premium .pills button {
+  border: none; background: transparent; cursor: pointer;
+  font-size: 13px; font-weight: 600; color: var(--ink2);
+  padding: 7px 16px; border-radius: 999px; font-family: inherit;
+}
+.dash-premium .pills button.on { background: var(--ink-900); color: #fff; }
+.dash-premium .kstrip {
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  border-radius: 24px;
+  padding: 26px 8px;
+  margin-bottom: 24px;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+.dash-premium .term {
+  background: #161d1b; border-radius: 16px; padding: 16px 20px;
+  font-family: ui-monospace, Consolas, monospace; font-size: 12px; color: #8fa89f; line-height: 2.1;
+}
+.dash-premium .term b { color: #4fd0be; font-weight: 600; }
+.dash-premium .term .t { color: #55665f; }
+

@@ -1,12 +1,13 @@
 <template>
-  <div class="ai-metrics-page">
+  <div class="ai-metrics-page dash-premium">
     <el-skeleton v-if="loading" :rows="8" animated class="loading-wrap" />
 
     <template v-else>
       <!-- 页面头部 -->
       <div class="phdr phdr-dash">
         <div>
-          <h1>效果评估</h1>
+          <div class="eyebrow">AI Health · 效果评估</div>
+          <h1>效果<span class="g-text">评估看板</span></h1>
           <div class="phdr-sub">AI 评分准确性、可靠性与公平性实时监控</div>
         </div>
       </div>
@@ -25,6 +26,7 @@
       </div>
 
       <!-- 6个KPI卡片 -->
+      <div class="kstrip">
       <div class="kpi-row cols-6">
         <div class="kpi">
           <div class="kpi-lbl">评分一致性率（%）</div>
@@ -79,6 +81,7 @@
           <div class="kpi-num">{{ overview.efficiency_multiplier ?? 0 }}<span class="kpi-unit">x</span></div>
         </div>
       </div>
+      </div><!-- /kstrip -->
 
       <!-- 智能诊断与改进建议 -->
       <div class="card diagnosis-card">
